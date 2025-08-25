@@ -31,10 +31,10 @@ static const int16_t weights_dct8[64];
 static const int16_t weights_dct16[256];
 static const int16_t weights_dct32[1024];
 
-const int16_t g_t4[4][4];
-const int16_t g_t8[8][8];
-const int16_t g_t16[16][16];
-const int16_t g_t32[32][32];
+static const int16_t g_t4[4][4];
+static const int16_t g_t8[8][8];
+static const int16_t g_t16[16][16];
+static const int16_t g_t32[32][32];
 
 uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass);
 

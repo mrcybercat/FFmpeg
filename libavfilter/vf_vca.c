@@ -77,7 +77,7 @@ typedef struct VCAResults {
 typedef struct VCAContext {
     const AVClass *class;    
     AVIOContext *avio_context;
-    void (*print)(AVFilterContext *ctx, int lvl, const char *msg, ...) av_printf_format(2, 3);
+    void (*print)(AVFilterContext *ctx, int lvl, const char *msg, ...); // av_printf_format(2, 3);
 
     // options 
     unsigned blocksize;
@@ -130,7 +130,7 @@ static const enum AVPixelFormat pxl_fmts[] = {
     AV_PIX_FMT_NONE
 };
 
-void copy_vals_wo_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer)
+static void copy_vals_wo_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer)
 {
     if (pxl_depth == 1)
     {
@@ -151,7 +151,7 @@ void copy_vals_wo_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, 
     }
 }
 
-void copy_vals_w_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer, unsigned padding_r, unsigned padding_b)
+static void copy_vals_w_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer, unsigned padding_r, unsigned padding_b)
 {
     unsigned y          = 0;
     int16_t *buffer_last_line = buffer;
@@ -200,7 +200,7 @@ void copy_vals_w_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, u
 
 }
 
-void copy_vals_buffer(unsigned pxl_depth, unsigned offset, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer, unsigned padding_r, unsigned padding_b)
+static void copy_vals_buffer(unsigned pxl_depth, unsigned offset, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer, unsigned padding_r, unsigned padding_b)
 {
     src += offset;
     if (padding_r == 0 && padding_b == 0)
@@ -245,7 +245,7 @@ static int perform_dct(const unsigned bit_depth, const unsigned blocksize, int16
     }
 }
 
-uint32_t calc_energy(int blocksize, int linesize, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
+static uint32_t calc_energy(int blocksize, int linesize, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
     int block_i = 0u;
     uint32_t frameTexture = 0;
     int stride = linesize / plane->pxl_depth;
@@ -282,7 +282,7 @@ uint32_t calc_energy(int blocksize, int linesize, uint8_t *src, VCAPlaneInfo *pl
     return  (uint32_t)((double)(frameTexture) / (plane->n_blocks * E_norm_factor));
 }
 
-double calc_energy_diff(VCAPlaneInfo *plane, VCAResults *result){
+static double calc_energy_diff(VCAPlaneInfo *plane, VCAResults *result){
     int blockIndex = 0u;
     double energyDifference = 0;
 
@@ -317,7 +317,7 @@ static void print_file(AVFilterContext *ctx, int lvl, const char *msg, ...)
     va_end(argument_list);
 }
 
-void perform_vca(AVFilterLink *inlink, AVFrame *in, FilterLink *inl , VCAContext *v, int plane_i, double* h, uint32_t* E){
+static void perform_vca(AVFilterLink *inlink, AVFrame *in, FilterLink *inl , VCAContext *v, int plane_i, double* h, uint32_t* E){
 
     E[plane_i] = calc_energy(v->blocksize, in->linesize[plane_i], in->data[plane_i], v->vca_plane[plane_i], v->vca_result[plane_i], v->enable_lowpass);
     // On first frame instead of calculating difference assign difference to NaN
