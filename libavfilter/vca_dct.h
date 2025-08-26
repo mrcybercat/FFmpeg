@@ -27,6 +27,12 @@
 #ifndef AVFILTER_VCADCT_H
 #define AVFILTER_VCADCT_H
 
+#if defined(__GNUC__)
+#define ALIGN_VAR_32(T, var) T var __attribute__((aligned(32)))
+#elif defined(_MSC_VER)
+#define ALIGN_VAR_32(T, var) __declspec(align(32)) T var
+#endif
+
 static const int16_t weights_dct8[64];
 static const int16_t weights_dct16[256];
 static const int16_t weights_dct32[1024];

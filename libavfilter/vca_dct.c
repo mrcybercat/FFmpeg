@@ -370,11 +370,11 @@ static void dct4_c(const int16_t* src, int16_t* dst, int bit_depth)
     const int shift_1st = 1 + bit_depth - 8;
     const int shift_2nd = 8;
 
-    //ALIGN_VAR_32(int16_t, coef[4 * 4]);
-    //ALIGN_VAR_32(int16_t, block[4 * 4]);
-    int16_t* coef;
-    int16_t* block;
-    coef=av_malloc(4*4*sizeof(int16_t));    
+    ALIGN_VAR_32(int16_t, coef[4 * 4]);
+    ALIGN_VAR_32(int16_t, block[4 * 4]);
+    //int16_t* coef;
+    //int16_t* block;
+    //coef=av_malloc(4*4*sizeof(int16_t));    
     //block=av_malloc(4*4*sizeof(int16_t));    
 
 
@@ -383,7 +383,10 @@ static void dct4_c(const int16_t* src, int16_t* dst, int bit_depth)
     //    memcpy(&block[i * 4], &src[i * srcStride], 4 * sizeof(int16_t));
     //}
 
-    block = av_memdup(src, 4 * 4 * sizeof(int16_t));
+    //block = av_memdup(src, 4 * 4 * sizeof(int16_t));
+
+    memcpy(block, src, 4 * 4 * sizeof(int16_t));
+
 
     partial_butterfly4(block, coef, shift_1st, 4);
     partial_butterfly4(coef, dst, shift_2nd, 4);
@@ -394,12 +397,13 @@ void ff_vca_dct8(const int16_t* src, int16_t* dst, int bit_depth)
     const int shift_1st = 2 + bit_depth - 8;
     const int shift_2nd = 9;
 
-    //ALIGN_VAR_32(int16_t, coef[8 * 8]);
-    //ALIGN_VAR_32(int16_t, block[8 * 8]);
-    int16_t* coef;
-    int16_t* block;
-    coef=av_malloc(8*8*sizeof(int16_t));    
+    ALIGN_VAR_32(int16_t, coef[8 * 8]);
+    ALIGN_VAR_32(int16_t, block[8 * 8]);
+    //int16_t* coef;
+    //int16_t* block;
+    //coef=av_malloc(8*8*sizeof(int16_t));    
     //block=av_malloc(8*8*sizeof(int16_t));    
+    memcpy(block, src, 8 * 8 * sizeof(int16_t));
 
 
     //for (int i = 0; i < 8; i++)
@@ -407,7 +411,7 @@ void ff_vca_dct8(const int16_t* src, int16_t* dst, int bit_depth)
     //    memcpy(&block[i * 8], &src[i * srcStride], 8 * sizeof(int16_t));
     //}
 
-    block = av_memdup(src, 8 * 8 * sizeof(int16_t));
+    //block = av_memdup(src, 8 * 8 * sizeof(int16_t));
 
     partial_butterfly8(block, coef, shift_1st, 8);
     partial_butterfly8(coef, dst, shift_2nd, 8);
@@ -418,14 +422,15 @@ void ff_vca_dct16(const int16_t* src, int16_t* dst, int bit_depth)
     const int shift_1st = 3 + bit_depth - 8;
     const int shift_2nd = 10;
 
-    //ALIGN_VAR_32(int16_t, coef[16 * 16]);
-    //ALIGN_VAR_32(int16_t, block[16 * 16]);
-    int16_t* coef;
-    int16_t* block;
-    coef=av_malloc(16*16*sizeof(int16_t));
+    ALIGN_VAR_32(int16_t, coef[16 * 16]);
+    ALIGN_VAR_32(int16_t, block[16 * 16]);
+    //int16_t* coef;
+    //int16_t* block;
+    //coef=av_malloc(16*16*sizeof(int16_t));
     //block=av_malloc(16*16*sizeof(int16_t));
 
-    block = av_memdup(src, 16 * 16 * sizeof(int16_t));
+    //block = av_memdup(src, 16 * 16 * sizeof(int16_t));
+    memcpy(block, src, 16 * 16 * sizeof(int16_t));
 
     partial_butterfly16(block, coef, shift_1st, 16);
     partial_butterfly16(coef, dst, shift_2nd, 16);
@@ -436,11 +441,11 @@ void ff_vca_dct32(const int16_t* src, int16_t* dst, int bit_depth)
     const int shift_1st = 4 + bit_depth - 8;
     const int shift_2nd = 11;
 
-    //ALIGN_VAR_32(int16_t, coef[32 * 32]);
-    //ALIGN_VAR_32(int16_t, block[32 * 32]);
-    int16_t* coef;
-    int16_t* block;
-    coef=av_malloc(32*32*sizeof(int16_t));    
+    ALIGN_VAR_32(int16_t, coef[32 * 32]);
+    ALIGN_VAR_32(int16_t, block[32 * 32]);
+    //int16_t* coef;
+    //int16_t* block;
+    //coef=av_malloc(32*32*sizeof(int16_t));    
     //block=av_malloc(32*32*sizeof(int16_t));    
 
     //for (int i = 0; i < 32; i++)
@@ -448,7 +453,8 @@ void ff_vca_dct32(const int16_t* src, int16_t* dst, int bit_depth)
     //    memcpy(&block[i * 32], &src[i * srcStride], 32 * sizeof(int16_t));
     //}
 
-    block = av_memdup(src, 32 * 32 * sizeof(int16_t));
+    memcpy(block, src, 32 * 32 * sizeof(int16_t));
+    //block = av_memdup(src, 32 * 32 * sizeof(int16_t));
 
     partial_butterfly32(block, coef, shift_1st, 32);
     partial_butterfly32(coef, dst, shift_2nd, 32);
@@ -498,12 +504,12 @@ void ff_vca_lowpass_dct8(const int16_t* src, int16_t* dst, int bit_depth)
 
 void ff_vca_lowpass_dct16(const int16_t* src, int16_t* dst, int bit_depth)
 {
-    //ALIGN_VAR_32(int16_t, coef[8 * 8]);
-    //ALIGN_VAR_32(int16_t, avg_block[8 * 8]);
-    int16_t* coef;
-    int16_t* avg_block;
-    coef=av_malloc(8*8*sizeof(int16_t));    
-    avg_block=av_malloc(8*8*sizeof(int16_t));   
+    ALIGN_VAR_32(int16_t, coef[8 * 8]);
+    ALIGN_VAR_32(int16_t, avg_block[8 * 8]);
+    //int16_t* coef;
+    //int16_t* avg_block;
+    //coef=av_malloc(8*8*sizeof(int16_t));    
+    //avg_block=av_malloc(8*8*sizeof(int16_t));   
 
 
     int32_t totalSum = 0;
@@ -535,12 +541,12 @@ void ff_vca_lowpass_dct16(const int16_t* src, int16_t* dst, int bit_depth)
 
 void ff_vca_lowpass_dct32(const int16_t* src, int16_t* dst, int bit_depth)
 {
-    //ALIGN_VAR_32(int16_t, coef[16 * 16]);
-    //ALIGN_VAR_32(int16_t, avg_block[16 * 16]);
-    int16_t* coef;
-    int16_t* avg_block;
-    coef=av_malloc(16*16*sizeof(int16_t));    
-    avg_block=av_malloc(16*16*sizeof(int16_t));   
+    ALIGN_VAR_32(int16_t, coef[16 * 16]);
+    ALIGN_VAR_32(int16_t, avg_block[16 * 16]);
+    //int16_t* coef;
+    //int16_t* avg_block;
+    //coef=av_malloc(16*16*sizeof(int16_t));    
+    //avg_block=av_malloc(16*16*sizeof(int16_t));   
    
     int32_t totalSum = 0;
     int16_t sum = 0;
