@@ -215,18 +215,13 @@ static uint32_t calc_energy_32(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
         return AVERROR(AVERROR_INVALIDDATA);
 
     for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 32){  
-        int padding_b = fmaxf(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);
+        int padding_b = FFMAX(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);
         for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 32){
             int offset = blockX * plane->pxl_depth + (blockY * stride);
-            int padding_r = fmaxf((int)(blockX + 32) - (int)(plane->w_pxls_src), 0);
+            int padding_r = FFMAX((int)(blockX + 32) - (int)(plane->w_pxls_src), 0);
 
             // Copy values to block buffer 
             copy_vals_buffer(plane->pxl_depth, offset, 32, src, stride, block_buffer, padding_r, padding_b);
-            // Perform DCTs
-            //  if(enable_lowpass)
-            //     ff_vca_lowpass_dct32(block_buffer, out_buffer, bit_depth);
-            // else
-            //     ff_vca_dct32(block_buffer, out_buffer, bit_depth);
 
             (enable_lowpass ? ff_vca_lowpass_dct32 : ff_vca_dct32)(block_buffer, out_buffer, bit_depth);
 
@@ -255,19 +250,14 @@ static uint32_t calc_energy_16(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
         return AVERROR(AVERROR_INVALIDDATA);
 
     for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 16){  
-        int padding_b = fmaxf(((int)(blockY + 16) - (int)(plane->h_pxls_src)), 0);
+        int padding_b = FFMAX(((int)(blockY + 16) - (int)(plane->h_pxls_src)), 0);
         for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 16){
             int offset = blockX * plane->pxl_depth + (blockY * stride);
-            int padding_r = fmaxf((int)(blockX + 16) - (int)(plane->w_pxls_src), 0);
+            int padding_r = FFMAX((int)(blockX + 16) - (int)(plane->w_pxls_src), 0);
 
             copy_vals_buffer(plane->pxl_depth, offset, 16, src, stride, block_buffer, padding_r, padding_b);
-            //if(enable_lowpass)
-            //    ff_vca_lowpass_dct16(block_buffer, out_buffer, bit_depth);
-            //else
-            //    ff_vca_dct16(block_buffer, out_buffer, bit_depth);
 
             (enable_lowpass ? ff_vca_lowpass_dct16 : ff_vca_dct16)(block_buffer, out_buffer, bit_depth);
-
 
             result->energy[block_i] = calc_weighted_coeff(16, out_buffer, enable_lowpass);
             
@@ -290,19 +280,14 @@ static uint32_t calc_energy_8(int stride, uint8_t *src, VCAPlaneInfo *plane, VCA
         return AVERROR(AVERROR_INVALIDDATA);
 
     for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 8){  
-        int padding_b = fmaxf(((int)(blockY + 8) - (int)(plane->h_pxls_src)), 0);
+        int padding_b = FFMAX(((int)(blockY + 8) - (int)(plane->h_pxls_src)), 0);
         for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 8){
             int offset = blockX * plane->pxl_depth + (blockY * stride);
-            int padding_r = fmaxf((int)(blockX + 8) - (int)(plane->w_pxls_src), 0);
+            int padding_r = FFMAX((int)(blockX + 8) - (int)(plane->w_pxls_src), 0);
 
             copy_vals_buffer(plane->pxl_depth, offset, 8, src, stride, block_buffer, padding_r, padding_b);
-            //if(enable_lowpass)
-            //    ff_vca_lowpass_dct8(block_buffer, out_buffer, bit_depth);
-            //else
-            //    ff_vca_dct8(block_buffer, out_buffer, bit_depth);
 
             (enable_lowpass ? ff_vca_lowpass_dct8 : ff_vca_dct8)(block_buffer, out_buffer, bit_depth);
-
 
             result->energy[block_i] = calc_weighted_coeff(8, out_buffer, enable_lowpass);
             
@@ -385,16 +370,14 @@ static void perform_vca(AVFilterLink *inlink, AVFrame *in, FilterLink *inl , VCA
         h[plane_i] = 0;
     }
     // At the end copy current energy to the previous
-    //memcpy(ptr, p, size);
     memcpy(v->vca_result[plane_i]->energy_prev ,v->vca_result[plane_i]->energy, v->vca_plane[plane_i]->n_blocks * sizeof(uint32_t));
-    //v->vca_result[plane_i]->energy_prev = av_memdup(v->vca_result[plane_i]->energy, v->vca_plane[plane_i]->n_blocks * sizeof(uint32_t));
 
     if (v->summary) {
-        v->vca_result[plane_i]->min_E  = v->n_frames_processed == 0 ? E[plane_i] : fminf(E[plane_i], v->vca_result[plane_i]->min_E);
-        v->vca_result[plane_i]->min_h  = v->n_frames_processed == 0 ? h[plane_i] : fminf(h[plane_i], v->vca_result[plane_i]->min_h);
+        v->vca_result[plane_i]->min_E  = v->n_frames_processed == 0 ? E[plane_i] : FFMIN(E[plane_i], v->vca_result[plane_i]->min_E);
+        v->vca_result[plane_i]->min_h  = v->n_frames_processed == 0 ? h[plane_i] : FFMIN(h[plane_i], v->vca_result[plane_i]->min_h);
         
-        v->vca_result[plane_i]->max_E = fmaxf(E[plane_i], v->vca_result[plane_i]->max_E);
-        v->vca_result[plane_i]->max_h = fmaxf(h[plane_i], v->vca_result[plane_i]->max_h);
+        v->vca_result[plane_i]->max_E = FFMAX(E[plane_i], v->vca_result[plane_i]->max_E);
+        v->vca_result[plane_i]->max_h = FFMAX(h[plane_i], v->vca_result[plane_i]->max_h);
 
         //v->vca_result[plane_i]->max_E = fmaxf(E[plane_i], v->vca_result[plane_i]->max_E);
         //v->vca_result[plane_i]->max_h = fmaxf(h[plane_i], v->vca_result[plane_i]->max_h);
@@ -511,22 +494,6 @@ static int config_input(AVFilterLink *inlink)
         if (!v->vca_result[i]->energy || ! v->vca_result[i]->energy_prev || !v->vca_result[i]->energy_dif)
             return AVERROR(ENOMEM);
     }
-
-    // CSV header
-    /*
-        if (v->yuview) {
-        v->print(ctx, AV_LOG_INFO, "%%;syntax-version;v1.22\n");
-        v->print(ctx, AV_LOG_INFO, "%%;%%;Written by VCA for YUView\n");
-        v->print(ctx, AV_LOG_INFO, "%%;%%;POC;X-position of the left top pixel in the block;Y-position of the left top pixel in the block;Width of the block;Height of the block; Type-ID;Type specific value\n");
-        //v->print(ctx, AV_LOG_INFO, "%;seq-specs;%s;layer0;%d;%d;24\n",inlink->inputs[0]->name,inlink->w,inlink->h);
-        v->print(ctx, AV_LOG_INFO, "%%;type;0;BlockBrightness;range\n");
-        v->print(ctx, AV_LOG_INFO, "%%;defaultRange;0;300;heat\n");
-        v->print(ctx, AV_LOG_INFO, "%%;type;1;BlockEnergy;range\n");
-        v->print(ctx, AV_LOG_INFO, "%%;defaultRange;0;10000;heat\n");
-        v->print(ctx, AV_LOG_INFO, "%%;type;2;SAD;range\n");
-        v->print(ctx, AV_LOG_INFO, "%%;defaultRange;0;3000;heat\n");
-    }
-    */
 
     if (!v->verbose) {
         v->print(ctx, AV_LOG_INFO, "POC,E,h");
@@ -1059,3 +1026,24 @@ static int perform_dct(const unsigned bit_depth, const unsigned blocksize, int16
         
         //v->vca_result[i]->min_E = 0;
         //v->vca_result[i]->min_h = 0;
+
+            //memcpy(ptr, p, size);
+    //v->vca_result[plane_i]->energy_prev = av_memdup(v->vca_result[plane_i]->energy, v->vca_plane[plane_i]->n_blocks * sizeof(uint32_t));
+
+
+    
+    // CSV header
+    /*
+        if (v->yuview) {
+        v->print(ctx, AV_LOG_INFO, "%%;syntax-version;v1.22\n");
+        v->print(ctx, AV_LOG_INFO, "%%;%%;Written by VCA for YUView\n");
+        v->print(ctx, AV_LOG_INFO, "%%;%%;POC;X-position of the left top pixel in the block;Y-position of the left top pixel in the block;Width of the block;Height of the block; Type-ID;Type specific value\n");
+        //v->print(ctx, AV_LOG_INFO, "%;seq-specs;%s;layer0;%d;%d;24\n",inlink->inputs[0]->name,inlink->w,inlink->h);
+        v->print(ctx, AV_LOG_INFO, "%%;type;0;BlockBrightness;range\n");
+        v->print(ctx, AV_LOG_INFO, "%%;defaultRange;0;300;heat\n");
+        v->print(ctx, AV_LOG_INFO, "%%;type;1;BlockEnergy;range\n");
+        v->print(ctx, AV_LOG_INFO, "%%;defaultRange;0;10000;heat\n");
+        v->print(ctx, AV_LOG_INFO, "%%;type;2;SAD;range\n");
+        v->print(ctx, AV_LOG_INFO, "%%;defaultRange;0;3000;heat\n");
+    }
+    */
