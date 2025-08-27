@@ -223,15 +223,15 @@ static uint32_t calc_energy_32(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
             // Copy values to block buffer 
             copy_vals_buffer(plane->pxl_depth, offset, 32, src, stride, block_buffer, padding_r, padding_b);
             // Perform DCTs
-            if(enable_lowpass)
-                ff_vca_lowpass_dct32(block_buffer, out_buffer, bit_depth);
-            else
-                ff_vca_dct32(block_buffer, out_buffer, bit_depth);
+            //  if(enable_lowpass)
+            //     ff_vca_lowpass_dct32(block_buffer, out_buffer, bit_depth);
+            // else
+            //     ff_vca_dct32(block_buffer, out_buffer, bit_depth);
 
-            //(enable_lowpass ? ff_vca_lowpass_dct16 : ff_vca_dct16)(block_buffer, out_buffer, bit_depth);
+            (enable_lowpass ? ff_vca_lowpass_dct32 : ff_vca_dct32)(block_buffer, out_buffer, bit_depth);
 
             // Calculate energy and brightness
-            //result.brightnessPerBlock[blockIndex] = uint32_t(sqrt(coeffBuffer[0]));
+            // result.brightnessPerBlock[blockIndex] = uint32_t(sqrt(coeffBuffer[0]));
             result->energy[block_i] = calc_weighted_coeff(32, out_buffer, enable_lowpass);
             
             frameTexture += result->energy[block_i];
@@ -261,10 +261,13 @@ static uint32_t calc_energy_16(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
             int padding_r = fmaxf((int)(blockX + 16) - (int)(plane->w_pxls_src), 0);
 
             copy_vals_buffer(plane->pxl_depth, offset, 16, src, stride, block_buffer, padding_r, padding_b);
-            if(enable_lowpass)
-                ff_vca_lowpass_dct16(block_buffer, out_buffer, bit_depth);
-            else
-                ff_vca_dct16(block_buffer, out_buffer, bit_depth);
+            //if(enable_lowpass)
+            //    ff_vca_lowpass_dct16(block_buffer, out_buffer, bit_depth);
+            //else
+            //    ff_vca_dct16(block_buffer, out_buffer, bit_depth);
+
+            (enable_lowpass ? ff_vca_lowpass_dct16 : ff_vca_dct16)(block_buffer, out_buffer, bit_depth);
+
 
             result->energy[block_i] = calc_weighted_coeff(16, out_buffer, enable_lowpass);
             
@@ -293,10 +296,13 @@ static uint32_t calc_energy_8(int stride, uint8_t *src, VCAPlaneInfo *plane, VCA
             int padding_r = fmaxf((int)(blockX + 8) - (int)(plane->w_pxls_src), 0);
 
             copy_vals_buffer(plane->pxl_depth, offset, 8, src, stride, block_buffer, padding_r, padding_b);
-            if(enable_lowpass)
-                ff_vca_lowpass_dct8(block_buffer, out_buffer, bit_depth);
-            else
-                ff_vca_dct8(block_buffer, out_buffer, bit_depth);
+            //if(enable_lowpass)
+            //    ff_vca_lowpass_dct8(block_buffer, out_buffer, bit_depth);
+            //else
+            //    ff_vca_dct8(block_buffer, out_buffer, bit_depth);
+
+            (enable_lowpass ? ff_vca_lowpass_dct8 : ff_vca_dct8)(block_buffer, out_buffer, bit_depth);
+
 
             result->energy[block_i] = calc_weighted_coeff(8, out_buffer, enable_lowpass);
             
@@ -475,8 +481,7 @@ static int config_input(AVFilterLink *inlink)
         v->vca_plane[2]->h_pxls_src = AV_CEIL_RSHIFT(inlink->h, desc->log2_chroma_h);
 
         planes = 3;
-    }
-    else 
+    } else 
         planes = 1;
 
     for(int i = 0; i < planes; i++){
@@ -534,6 +539,8 @@ static int config_input(AVFilterLink *inlink)
 
         v->print(ctx, AV_LOG_INFO, "\n");
     }
+
+    av_log(ctx, AV_LOG_INFO, "threads: %d\n", ff_filter_get_nb_threads(ctx));
 
     return 0;
 }

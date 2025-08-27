@@ -44,6 +44,8 @@ static const int16_t g_t32[32][32];
 
 uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass);
 
+void ff_vca_dct4(const int16_t* src, int16_t* dst, int bit_depth);
+
 void ff_vca_dct8(const int16_t* src, int16_t* dst, int bit_depth);
 
 void ff_vca_dct16(const int16_t* src, int16_t* dst, int bit_depth);
