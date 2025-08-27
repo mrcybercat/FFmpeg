@@ -341,6 +341,7 @@ static int calc_energy_filter_slice(AVFilterContext *ctx, void *arg, int job, in
             return AVERROR(AVERROR_INVALIDDATA);
     }
 
+    return 0;
 }
 
 
