@@ -365,7 +365,7 @@ static void partial_butterfly32(const int16_t* src, int16_t* dst, int shift, int
     }
 }
 
-static void ff_vca_dct4(const int16_t* block, int16_t* dst, int bit_depth)
+void ff_vca_dct4(const int16_t* block, int16_t* dst, int bit_depth)
 {
     const int shift_1st = 1 + bit_depth - 8;
     const int shift_2nd = 8;
