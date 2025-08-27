@@ -73,6 +73,20 @@ typedef struct VCAResults {
     double *energy_dif_frames;
 } VCAResults;
 
+typedef struct ThreadData {
+    int stride;
+    int blocksize;
+
+    int enable_lowpass;
+
+    uint8_t *src;
+
+    VCAPlaneInfo *plane;
+    VCAResults *result;
+    
+    uint32_t *partial_sums;
+} ThreadData;
+
 
 typedef struct VCAContext {
     const AVClass *class;    
@@ -203,9 +217,9 @@ static void copy_vals_buffer(unsigned pxl_depth, unsigned offset, unsigned block
         copy_vals_w_padding(pxl_depth, blocksize, src, stride, buffer, padding_r, padding_b);
 }
 
-static uint32_t calc_energy_32(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
-    int block_i = 0u;
-    uint32_t frameTexture = 0;
+static uint32_t calc_energy_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum){
+    int block_i = (slice_start / 32) * plane->w_blocks;
+    uint32_t sliceTexture = 0;
 
     ALIGN_VAR_32(int16_t, block_buffer[32 * 32]);
     ALIGN_VAR_32(int16_t, out_buffer[32 * 32]);
@@ -214,7 +228,7 @@ static uint32_t calc_energy_32(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
     if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
         return AVERROR(AVERROR_INVALIDDATA);
 
-    for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 32){  
+    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 32) { 
         int padding_b = FFMAX(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);
         for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 32){
             int offset = blockX * plane->pxl_depth + (blockY * stride);
@@ -229,18 +243,19 @@ static uint32_t calc_energy_32(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
             // result.brightnessPerBlock[blockIndex] = uint32_t(sqrt(coeffBuffer[0]));
             result->energy[block_i] = calc_weighted_coeff(32, out_buffer, enable_lowpass);
             
-            frameTexture += result->energy[block_i];
+            sliceTexture += result->energy[block_i];
             block_i++;
         }
     }
     //av_freep(block_buffer);
     //av_freep(out_buffer);
-    return  (uint32_t)((double)(frameTexture) / (plane->n_blocks * E_norm_factor));
+    *partial_sum = sliceTexture;
+    return  sliceTexture;
 }
 
-static uint32_t calc_energy_16(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
-    int block_i = 0u;
-    uint32_t frameTexture = 0;
+static uint32_t calc_energy_16_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum){
+    int block_i = (slice_start / 16) * plane->w_blocks;
+    uint32_t sliceTexture = 0;
 
     ALIGN_VAR_32(int16_t, block_buffer[16 * 16]);
     ALIGN_VAR_32(int16_t, out_buffer[16 * 16]);
@@ -249,7 +264,7 @@ static uint32_t calc_energy_16(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
     if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
         return AVERROR(AVERROR_INVALIDDATA);
 
-    for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 16){  
+    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 16) { 
         int padding_b = FFMAX(((int)(blockY + 16) - (int)(plane->h_pxls_src)), 0);
         for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 16){
             int offset = blockX * plane->pxl_depth + (blockY * stride);
@@ -261,16 +276,17 @@ static uint32_t calc_energy_16(int stride, uint8_t *src, VCAPlaneInfo *plane, VC
 
             result->energy[block_i] = calc_weighted_coeff(16, out_buffer, enable_lowpass);
             
-            frameTexture += result->energy[block_i];
+            sliceTexture += result->energy[block_i];
             block_i++;
         }
     }
-    return  (uint32_t)((double)(frameTexture) / (plane->n_blocks * E_norm_factor));
+    *partial_sum = sliceTexture;
+    return sliceTexture;
 }
 
-static uint32_t calc_energy_8(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
-    int block_i = 0u;
-    uint32_t frameTexture = 0;
+static uint32_t calc_energy_8_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum){
+    int block_i = (slice_start / 8) * plane->w_blocks;
+    uint32_t sliceTexture = 0;
 
     ALIGN_VAR_32(int16_t, block_buffer[8 * 8]);
     ALIGN_VAR_32(int16_t, out_buffer[8 * 8]);
@@ -279,7 +295,7 @@ static uint32_t calc_energy_8(int stride, uint8_t *src, VCAPlaneInfo *plane, VCA
     if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
         return AVERROR(AVERROR_INVALIDDATA);
 
-    for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 8){  
+    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 8) { 
         int padding_b = FFMAX(((int)(blockY + 8) - (int)(plane->h_pxls_src)), 0);
         for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 8){
             int offset = blockX * plane->pxl_depth + (blockY * stride);
@@ -291,39 +307,68 @@ static uint32_t calc_energy_8(int stride, uint8_t *src, VCAPlaneInfo *plane, VCA
 
             result->energy[block_i] = calc_weighted_coeff(8, out_buffer, enable_lowpass);
             
-            frameTexture += result->energy[block_i];
+            sliceTexture += result->energy[block_i];
             block_i++;
         }
     }
-    return  (uint32_t)((double)(frameTexture) / (plane->n_blocks * E_norm_factor));
+    *partial_sum = sliceTexture;
+    return sliceTexture;
 }
 
-
-static uint32_t calc_energy(int blocksize, int linesize, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
+static int calc_energy_filter_slice(AVFilterContext *ctx, void *arg, int job, int nb_jobs){
+    ThreadData *th = arg;
     uint32_t energy = 0;
-    int stride = linesize / plane->pxl_depth;
 
-    //int16_t* block_buffer;
-    //int16_t* out_buffer;
-    /*
-    */
-    switch (blocksize) {
+
+    int block_row_start = (th->plane->h_blocks * job)     / nb_jobs;
+    int block_row_end   = (th->plane->h_blocks * (job+1)) / nb_jobs;
+
+    int slice_start = block_row_start * th->blocksize;
+    int slice_end   = block_row_end   * th->blocksize;
+
+
+    switch (th->blocksize) {
         case 32:
-            energy = calc_energy_32(stride, src, plane, result, enable_lowpass);
+            energy = calc_energy_32_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, slice_start, slice_end, &th->partial_sums[job]);
             break;
         case 16:
-            energy = calc_energy_16(stride, src, plane, result, enable_lowpass);
+            energy = calc_energy_16_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, slice_start, slice_end, &th->partial_sums[job]);
             break;
         case 8:
-            energy = calc_energy_8(stride, src, plane, result, enable_lowpass);
+            energy = calc_energy_8_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, slice_start, slice_end, &th->partial_sums[job]);
             break;
         default:
             return AVERROR(AVERROR_INVALIDDATA);
     }
 
-    return  energy;
 }
 
+
+static uint32_t calc_energy(AVFilterContext *ctx, int blocksize, int linesize, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
+    uint32_t frameTexture = 0;
+    int stride = linesize / plane->pxl_depth;
+
+    int nb_threads = ff_filter_get_nb_threads(ctx);
+
+    ThreadData th = {
+        .stride = stride,
+        .blocksize = blocksize,
+        .enable_lowpass = enable_lowpass,
+        .src = src,
+        .plane = plane,
+        .result = result,
+        .partial_sums = av_calloc(nb_threads, sizeof(uint32_t)),
+    };
+
+    ff_filter_execute(ctx, calc_energy_filter_slice, &th, NULL, FFMIN(plane->h_blocks, nb_threads));
+
+    for (int i = 0; i < nb_threads; i++)
+        frameTexture += th.partial_sums[i];
+
+    av_free(th.partial_sums);
+
+    return (uint32_t)((double)frameTexture /(plane->n_blocks * E_norm_factor));
+}
 
 static double calc_energy_diff(VCAPlaneInfo *plane, VCAResults *result){
     int blockIndex = 0u;
@@ -360,9 +405,9 @@ static void print_file(AVFilterContext *ctx, int lvl, const char *msg, ...)
     va_end(argument_list);
 }
 
-static void perform_vca(AVFilterLink *inlink, AVFrame *in, FilterLink *inl , VCAContext *v, int plane_i, double* h, uint32_t* E){
+static void perform_vca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl , VCAContext *v, int plane_i, double* h, uint32_t* E){
 
-    E[plane_i] = calc_energy(v->blocksize, in->linesize[plane_i], in->data[plane_i], v->vca_plane[plane_i], v->vca_result[plane_i], v->enable_lowpass);
+    E[plane_i] = calc_energy(ctx, v->blocksize, in->linesize[plane_i], in->data[plane_i], v->vca_plane[plane_i], v->vca_result[plane_i], v->enable_lowpass);
     // On first frame instead of calculating difference assign difference to NaN
     if (inl->frame_count_out != 0) {
         h[plane_i] = calc_energy_diff(v->vca_plane[plane_i], v->vca_result[plane_i]);
@@ -401,7 +446,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     double h[3];
     
     for(int i = 0; i < planes; i++)
-        perform_vca(inlink, in, inl, v, i, h, E);
+        perform_vca(ctx, inlink, in, inl, v, i, h, E);
 
     v->n_frames_processed++;
 
@@ -641,7 +686,7 @@ const FFFilter ff_vf_vca = {
     .p.name        = "vca",
     .p.description = NULL_IF_CONFIG_SMALL("Perform VCA analysis."),
     .p.priv_class  = &vca_class,
-    .p.flags       = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
+    .p.flags       = AVFILTER_FLAG_SLICE_THREADS,
     .priv_size     = sizeof(VCAContext),
     .init          = init,
     .uninit        = uninit,
@@ -1046,4 +1091,101 @@ static int perform_dct(const unsigned bit_depth, const unsigned blocksize, int16
         v->print(ctx, AV_LOG_INFO, "%%;type;2;SAD;range\n");
         v->print(ctx, AV_LOG_INFO, "%%;defaultRange;0;3000;heat\n");
     }
+
+
+
+    static uint32_t calc_energy_32(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
+    int block_i = 0u;
+    uint32_t frameTexture = 0;
+
+    ALIGN_VAR_32(int16_t, block_buffer[32 * 32]);
+    ALIGN_VAR_32(int16_t, out_buffer[32 * 32]);
+
+    const unsigned bit_depth = plane->bit_depth;
+    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
+        return AVERROR(AVERROR_INVALIDDATA);
+
+    for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 32){  
+        int padding_b = FFMAX(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);
+        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 32){
+            int offset = blockX * plane->pxl_depth + (blockY * stride);
+            int padding_r = FFMAX((int)(blockX + 32) - (int)(plane->w_pxls_src), 0);
+
+            // Copy values to block buffer 
+            copy_vals_buffer(plane->pxl_depth, offset, 32, src, stride, block_buffer, padding_r, padding_b);
+
+            (enable_lowpass ? ff_vca_lowpass_dct32 : ff_vca_dct32)(block_buffer, out_buffer, bit_depth);
+
+            // Calculate energy and brightness
+            // result.brightnessPerBlock[blockIndex] = uint32_t(sqrt(coeffBuffer[0]));
+            result->energy[block_i] = calc_weighted_coeff(32, out_buffer, enable_lowpass);
+            
+            frameTexture += result->energy[block_i];
+            block_i++;
+        }
+    }
+    //av_freep(block_buffer);
+    //av_freep(out_buffer);
+    return  (uint32_t)((double)(frameTexture) / (plane->n_blocks * E_norm_factor));
+}
+
+static uint32_t calc_energy_16(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
+    int block_i = 0u;
+    uint32_t frameTexture = 0;
+
+    ALIGN_VAR_32(int16_t, block_buffer[16 * 16]);
+    ALIGN_VAR_32(int16_t, out_buffer[16 * 16]);
+
+    const unsigned bit_depth = plane->bit_depth;
+    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
+        return AVERROR(AVERROR_INVALIDDATA);
+
+    for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 16){  
+        int padding_b = FFMAX(((int)(blockY + 16) - (int)(plane->h_pxls_src)), 0);
+        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 16){
+            int offset = blockX * plane->pxl_depth + (blockY * stride);
+            int padding_r = FFMAX((int)(blockX + 16) - (int)(plane->w_pxls_src), 0);
+
+            copy_vals_buffer(plane->pxl_depth, offset, 16, src, stride, block_buffer, padding_r, padding_b);
+
+            (enable_lowpass ? ff_vca_lowpass_dct16 : ff_vca_dct16)(block_buffer, out_buffer, bit_depth);
+
+            result->energy[block_i] = calc_weighted_coeff(16, out_buffer, enable_lowpass);
+            
+            frameTexture += result->energy[block_i];
+            block_i++;
+        }
+    }
+    return  (uint32_t)((double)(frameTexture) / (plane->n_blocks * E_norm_factor));
+}
+
+static uint32_t calc_energy_8(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass){
+    int block_i = 0u;
+    uint32_t frameTexture = 0;
+
+    ALIGN_VAR_32(int16_t, block_buffer[8 * 8]);
+    ALIGN_VAR_32(int16_t, out_buffer[8 * 8]);
+
+    const unsigned bit_depth = plane->bit_depth;
+    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
+        return AVERROR(AVERROR_INVALIDDATA);
+
+    for (unsigned blockY = 0; blockY < plane->h_pxls; blockY += 8){  
+        int padding_b = FFMAX(((int)(blockY + 8) - (int)(plane->h_pxls_src)), 0);
+        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 8){
+            int offset = blockX * plane->pxl_depth + (blockY * stride);
+            int padding_r = FFMAX((int)(blockX + 8) - (int)(plane->w_pxls_src), 0);
+
+            copy_vals_buffer(plane->pxl_depth, offset, 8, src, stride, block_buffer, padding_r, padding_b);
+
+            (enable_lowpass ? ff_vca_lowpass_dct8 : ff_vca_dct8)(block_buffer, out_buffer, bit_depth);
+
+            result->energy[block_i] = calc_weighted_coeff(8, out_buffer, enable_lowpass);
+            
+            frameTexture += result->energy[block_i];
+            block_i++;
+        }
+    }
+    return  (uint32_t)((double)(frameTexture) / (plane->n_blocks * E_norm_factor));
+}
     */
