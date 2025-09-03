@@ -23,6 +23,7 @@
 
 #include "avfilter.h"
 #include "libavutil/eval.h"
+#include "libavformat/avio.h"
 
 #ifndef AVFILTER_VCADCT_H
 #define AVFILTER_VCADCT_H
@@ -32,6 +33,66 @@
 #elif defined(_MSC_VER)
 #define ALIGN_VAR_32(T, var) __declspec(align(32)) T var
 #endif
+
+typedef struct VCAPlaneInfo {
+    int pxl_depth;
+    int bit_depth;
+
+    int w_pxls_src;
+    int h_pxls_src;
+    
+    int n_blocks;
+
+    int w_blocks;
+    int h_blocks;
+
+    int w_pxls;
+    int h_pxls;
+} VCAPlaneInfo;
+
+typedef struct VCAResults {
+    // globals
+    uint32_t *energy;
+    uint32_t *energy_prev;
+    double *energy_dif;
+
+    // results
+    double max_h;
+    double max_E;
+    
+    double min_h;
+    double min_E;
+
+    uint32_t *energy_frames;
+    double *energy_dif_frames;
+} VCAResults;
+
+typedef struct VCAContext {
+    const AVClass *class;    
+    AVIOContext *avio_context;
+    void (*print)(AVFilterContext *ctx, int lvl, const char *msg, ...); // av_printf_format(2, 3);
+    void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
+
+    // options 
+    unsigned blocksize;
+    int enable_lowpass;
+    int enable_chroma;
+    int enable_texture;
+    int enable_simd;
+    int summary;
+    int verbose;
+    int yuview;
+    int n_frames;
+    char *file_str;
+
+    // video frame properties
+    VCAPlaneInfo **vca_plane;
+    int n_frames_processed;
+
+    // results
+    VCAResults **vca_result;
+} VCAContext;
+
 
 static const int16_t weights_dct8[64];
 static const int16_t weights_dct16[256];
@@ -44,19 +105,21 @@ static const int16_t g_t32[32][32];
 
 uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass);
 
-void ff_vca_dct4(const int16_t* src, int16_t* dst, int bit_depth);
+void ff_vca_dct4_c(const int16_t* src, int16_t* dst, int bit_depth);
 
-void ff_vca_dct8(const int16_t* src, int16_t* dst, int bit_depth);
+void ff_vca_dct8_c(const int16_t* src, int16_t* dst, int bit_depth);
 
-void ff_vca_dct16(const int16_t* src, int16_t* dst, int bit_depth);
+void ff_vca_dct16_c(const int16_t* src, int16_t* dst, int bit_depth);
 
-void ff_vca_dct32(const int16_t* src, int16_t* dst, int bit_depth);
+void ff_vca_dct32_c(const int16_t* src, int16_t* dst, int bit_depth);
 
-void ff_vca_lowpass_dct8(const int16_t* src, int16_t* dst, int bit_depth);
+void ff_vca_lowpass_dct8_c(const int16_t* src, int16_t* dst, int bit_depth);
 
-void ff_vca_lowpass_dct16(const int16_t* src, int16_t* dst, int bit_depth);
+void ff_vca_lowpass_dct16_c(const int16_t* src, int16_t* dst, int bit_depth);
 
-void ff_vca_lowpass_dct32(const int16_t* src, int16_t* dst, int bit_depth);
+void ff_vca_lowpass_dct32_c(const int16_t* src, int16_t* dst, int bit_depth);
+
+int ff_vca_dct_init_x86(VCAContext *v);
 
 #endif
 
