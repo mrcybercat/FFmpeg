@@ -24,16 +24,16 @@
 #include "libavfilter/vca_dct.h"
 
 void ff_dct8_8bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
-//void ff_dct8_10bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
-//void ff_dct8_12bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
+void ff_dct8_10bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
+void ff_dct8_12bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
 
 void ff_dct16_8bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
-//void ff_dct16_10bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
-//void ff_dct16_12bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
+void ff_dct16_10bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
+void ff_dct16_12bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
 
 void ff_dct32_8bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
-//void ff_dct32_10bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
-//void ff_dct32_12bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
+void ff_dct32_10bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
+void ff_dct32_12bit_avx2(const int16_t *src, int16_t *dst, intptr_t srcStride);
 
  
 #if HAVE_X86ASM
@@ -43,12 +43,12 @@ static void ff_dct8_avx2(const int16_t *src, int16_t *dst, int bit_depth) {
         case 8:
             ff_dct8_8bit_avx2(src, dst, 8);
             break;
-//        case 10:
-//            ff_dct8_10bit_avx2(src, dst, 8);
-//            break;
-//        case 12:
-//            ff_dct8_12bit_avx2(src, dst, 8);
-//            break;
+        case 10:
+            ff_dct8_10bit_avx2(src, dst, 8);
+            break;
+        case 12:
+            ff_dct8_12bit_avx2(src, dst, 8);
+            break;
         default:
             ff_vca_dct8_c(src, dst, bit_depth);
             break;
@@ -60,12 +60,12 @@ static void ff_dct16_avx2(const int16_t *src, int16_t *dst, int bit_depth) {
         case 8:
             ff_dct16_8bit_avx2(src, dst, 16);
             break;
-//        case 10:
-//            ff_dct16_10bit_avx2(src, dst, 16);
-//            break;
-//        case 12:
-//            ff_dct16_12bit_avx2(src, dst, 16);
-//            break;
+        case 10:
+            ff_dct16_10bit_avx2(src, dst, 16);
+            break;
+        case 12:
+            ff_dct16_12bit_avx2(src, dst, 16);
+            break;
         default:
             ff_vca_dct16_c(src, dst, bit_depth);
             break;
@@ -77,12 +77,12 @@ static void ff_dct32_avx2(const int16_t *src, int16_t *dst, int bit_depth) {
         case 8:
             ff_dct32_8bit_avx2(src, dst, 32);
             break;
-//        case 10:
-//            ff_dct32_10bit_avx2(src, dst, 32);
-//            break;
-//        case 12:
-//            ff_dct32_12bit_avx2(src, dst, 32);
-//            break;
+        case 10:
+            ff_dct32_10bit_avx2(src, dst, 32);
+            break;
+        case 12:
+            ff_dct32_12bit_avx2(src, dst, 32);
+            break;
         default:
             ff_vca_dct32_c(src, dst, bit_depth);
             break;
@@ -109,12 +109,12 @@ static void ff_lowpass_dct16_avx2(const int16_t *src, int16_t *dst, int bit_dept
         case 8:
             ff_dct8_8bit_avx2(avg_block, coef, 8);
             break;
-//        case 10:
-//            ff_dct16_10bit_avx2(avg_block, coef, 16);
-//            break;
-//        case 12:
-//            ff_dct16_12bit_avx2(avg_block, coef, 16);
-//            break;
+        case 10:
+            ff_dct8_10bit_avx2(avg_block, coef, 8);
+            break;
+        case 12:
+            ff_dct8_12bit_avx2(avg_block, coef, 8);
+            break;
         default:
             ff_vca_dct8_c(avg_block, coef, bit_depth);
             break;
@@ -149,12 +149,12 @@ static void ff_lowpass_dct32_avx2(const int16_t *src, int16_t *dst, int bit_dept
         case 8:
             ff_dct16_8bit_avx2(avg_block, coef, 16);
             break;
-//        case 10:
-//            ff_dct32_10bit_avx2(avg_block, coef, 32);
-//            break;
-//        case 12:
-//            ff_dct32_12bit_avx2(avg_block, coef, 32);
-//            break;
+        case 10:
+            ff_dct16_10bit_avx2(avg_block, coef, 16);
+            break;
+        case 12:
+            ff_dct16_12bit_avx2(avg_block, coef, 16);
+            break;
         default:
             ff_vca_dct16_c(avg_block, coef, bit_depth);
             break;
