@@ -163,21 +163,49 @@ SECTION .text
 const pd_2,                 times  8 dd 2
 const pd_4,                 times  4 dd 4
 const pd_8,                 times  4 dd 8
+const pd_128,               times  4 dd 128
 const pd_256,               times  4 dd 256
 const pd_512,               times  4 dd 512
 const pd_1024,              times  4 dd 1024
 const pw_ppppmmmm,          times  1 dw   1,   1,   1,   1,  -1,  -1,  -1,  -1
 const trans8_shuf,          times  1 dd   0,   4,   1,   5,   2,   6,   3,   7
 
-%define  BIT_DEPTH           8
-%define  DCT4_SHIFT          1
-%define  DCT4_ROUND          1
-%define IDCT_SHIFT           12
-%define IDCT_ROUND           2048
-%define  DST4_SHIFT          1
-%define  DST4_ROUND          1
-%define  DCT8_SHIFT1         2
-%define  DCT8_ROUND1         2
+cextern pd_16
+cextern pd_32
+cextern pd_64
+
+%macro DCT_CONSTS 1
+%if %1 == 12
+    %define     DCT4_SHIFT          5
+    %define     DCT4_ROUND          16
+    %define    IDCT_SHIFT           8
+    %define    IDCT_ROUND           128
+    %define     DST4_SHIFT          5
+    %define     DST4_ROUND          16
+    %define     DCT8_SHIFT1         6
+    %define     DCT8_ROUND1         32
+%elif %1 == 10
+    %define     DCT4_SHIFT          3
+    %define     DCT4_ROUND          4
+    %define    IDCT_SHIFT           10
+    %define    IDCT_ROUND           512
+    %define     DST4_SHIFT          3
+    %define     DST4_ROUND          4
+    %define     DCT8_SHIFT1         4
+    %define     DCT8_ROUND1         8
+%elif %1 == 8
+    %define     DCT4_SHIFT          1
+    %define     DCT4_ROUND          1
+    %define    IDCT_SHIFT           12
+    %define    IDCT_ROUND           2048
+    %define     DST4_SHIFT          1
+    %define     DST4_ROUND          1
+    %define     DCT8_SHIFT1         2
+    %define     DCT8_ROUND1         2
+%else
+    %error Unsupported BIT_DEPTH!
+%endif
+%endmacro
 
 %define  DCT8_ROUND2         256
 %define  DCT8_SHIFT2         9
@@ -223,8 +251,18 @@ const trans8_shuf,          times  1 dd   0,   4,   1,   5,   2,   6,   3,   7
 
 %endmacro
 
+%macro VCA_DCT8 1
+
 INIT_YMM avx2
+%if %1 == 12
+cglobal dct8_12bit, 3, 7, 11, 0-8*16
+%elif %1 == 10
+cglobal dct8_10bit, 3, 7, 11, 0-8*16
+%elif %1 == 8
 cglobal dct8_8bit, 3, 7, 11, 0-8*16
+%else
+    %error Unsupported BIT_DEPTH!
+%endif
 
 vbroadcasti128      m5,                [pd_ %+ DCT8_ROUND1]
 %define             DCT_SHIFT2         9
@@ -286,7 +324,7 @@ vbroadcasti128      m5,                [pd_ %+ DCT8_ROUND1]
     DCT8_PASS_2     6 * 16, 7 * 16
     movu            [r1 + 96],         m10
     RET
-
+%endmacro
 
 %macro DCT16_PASS_1_E 2
     vpbroadcastq    m7,                [r7 + %1]
@@ -384,11 +422,25 @@ vbroadcasti128      m5,                [pd_ %+ DCT8_ROUND1]
     movhlps         xm14,              xm10
 %endmacro
 
-INIT_YMM avx2
+%macro VCA_DCT16 1
 
+INIT_YMM avx2
+%if %1 == 12
+cglobal dct16_12bit, 3, 9, 16, 0-16*mmsize
+    %define         DCT_SHIFT          7
+    vbroadcasti128  m9,                [pd_64]
+%elif %1 == 10
+cglobal dct16_10bit, 3, 9, 16, 0-16*mmsize
+    %define         DCT_SHIFT          5
+    vbroadcasti128  m9,                [pd_16]
+%elif %1 == 8
 cglobal dct16_8bit, 3, 9, 16, 0-16*mmsize
     %define         DCT_SHIFT          3
     vbroadcasti128  m9,                [pd_4]
+%else
+    %error Unsupported BIT_DEPTH!
+%endif
+
 %define             DCT_SHIFT2         10
 
     add             r2d,               r2d
@@ -537,6 +589,7 @@ cglobal dct16_8bit, 3, 9, 16, 0-16*mmsize
     dec             r4d
     jnz             .pass2
     RET
+%endmacro
 
 %macro DCT32_PASS_1 4
     vbroadcasti128  m8,                [r7 + %1]
@@ -600,11 +653,24 @@ cglobal dct16_8bit, 3, 9, 16, 0-16*mmsize
 
 %endmacro
 
+%macro VCA_DCT32 1
 INIT_YMM avx2
 
+%if %1 == 12
+cglobal dct32_12bit, 3, 9, 16, 0-64*mmsize
+    %define         DCT_SHIFT          8
+    vpbroadcastq    m9,                [pd_128]
+%elif %1 == 10
+cglobal dct32_10bit, 3, 9, 16, 0-64*mmsize
+    %define         DCT_SHIFT          6
+    vpbroadcastq    m9,                [pd_32]
+%elif %1 == 8
 cglobal dct32_8bit, 3, 9, 16, 0-64*mmsize
     %define         DCT_SHIFT          4
     vpbroadcastq    m9,                [pd_8]
+%else
+    %error Unsupported BIT_DEPTH!
+%endif
 
 %define             DCT_SHIFT2         11
 
@@ -791,5 +857,21 @@ cglobal dct32_8bit, 3, 9, 16, 0-64*mmsize
     dec             r4d
     jnz             .pass2
     RET
+%endmacro
+
+DCT_CONSTS 8
+VCA_DCT8 8
+VCA_DCT16 8
+VCA_DCT32 8
+
+DCT_CONSTS 10
+VCA_DCT8 10
+VCA_DCT16 10
+VCA_DCT32 10
+
+DCT_CONSTS 12
+VCA_DCT8 12
+VCA_DCT16 12
+VCA_DCT32 12
 
 %endif
