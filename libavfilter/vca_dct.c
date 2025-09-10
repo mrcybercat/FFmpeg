@@ -21,7 +21,7 @@
 
 #include "vca_dct.h"
 
-#define safe_abs(n) _Generic((n), \
+#define SAFE_ABS(n) _Generic((n), \
     signed char: abs(n), short: abs(n), int: abs(n), long: labs(n), long long: llabs(n))
 
 
@@ -188,8 +188,7 @@ static void partial_butterfly4(const int16_t* src, int16_t* dst, int shift, int 
     int E[2], O[2];
     int add = 1 << (shift - 1);
 
-    for (j = 0; j < line; j++)
-    {
+    for (j = 0; j < line; j++) {
         /* E and O */
         E[0] = src[0] + src[3];
         O[0] = src[0] - src[3];
@@ -213,11 +212,9 @@ static void partial_butterfly8(const int16_t* src, int16_t* dst, int shift, int 
     int EE[2], EO[2];
     int add = 1 << (shift - 1);
 
-    for (j = 0; j < line; j++)
-    {
+    for (j = 0; j < line; j++) {
         /* E and O*/
-        for (k = 0; k < 4; k++)
-        {
+        for (k = 0; k < 4; k++) {
             E[k] = src[k] + src[7 - k];
             O[k] = src[k] - src[7 - k];
         }
@@ -251,18 +248,15 @@ static void partial_butterfly16(const int16_t* src, int16_t* dst, int shift, int
     int EEE[2], EEO[2];
     int add = 1 << (shift - 1);
 
-    for (j = 0; j < line; j++)
-    {
+    for (j = 0; j < line; j++) {
         /* E and O */
-        for (k = 0; k < 8; k++)
-        {
+        for (k = 0; k < 8; k++) {
             E[k] = src[k] + src[15 - k];
             O[k] = src[k] - src[15 - k];
         }
 
         /* EE and EO */
-        for (k = 0; k < 4; k++)
-        {
+        for (k = 0; k < 4; k++) {
             EE[k] = E[k] + E[7 - k];
             EO[k] = E[k] - E[7 - k];
         }
@@ -278,14 +272,12 @@ static void partial_butterfly16(const int16_t* src, int16_t* dst, int shift, int
         dst[4 * line] = (int16_t)((g_t16[4][0] * EEO[0] + g_t16[4][1] * EEO[1] + add) >> shift);
         dst[12 * line] = (int16_t)((g_t16[12][0] * EEO[0] + g_t16[12][1] * EEO[1] + add) >> shift);
 
-        for (k = 2; k < 16; k += 4)
-        {
+        for (k = 2; k < 16; k += 4) {
             dst[k * line] = (int16_t)((g_t16[k][0] * EO[0] + g_t16[k][1] * EO[1] + g_t16[k][2] * EO[2] +
                                        g_t16[k][3] * EO[3] + add) >> shift);
         }
 
-        for (k = 1; k < 16; k += 2)
-        {
+        for (k = 1; k < 16; k += 2) {
             dst[k * line] =  (int16_t)((g_t16[k][0] * O[0] + g_t16[k][1] * O[1] + g_t16[k][2] * O[2] + g_t16[k][3] * O[3] +
                                         g_t16[k][4] * O[4] + g_t16[k][5] * O[5] + g_t16[k][6] * O[6] + g_t16[k][7] * O[7] +
                                         add) >> shift);
@@ -305,25 +297,21 @@ static void partial_butterfly32(const int16_t* src, int16_t* dst, int shift, int
     int EEEE[2], EEEO[2];
     int add = 1 << (shift - 1);
 
-    for (j = 0; j < line; j++)
-    {
+    for (j = 0; j < line; j++) {
         /* E and O*/
-        for (k = 0; k < 16; k++)
-        {
+        for (k = 0; k < 16; k++) {
             E[k] = src[k] + src[31 - k];
             O[k] = src[k] - src[31 - k];
         }
 
         /* EE and EO */
-        for (k = 0; k < 8; k++)
-        {
+        for (k = 0; k < 8; k++) {
             EE[k] = E[k] + E[15 - k];
             EO[k] = E[k] - E[15 - k];
         }
 
         /* EEE and EEO */
-        for (k = 0; k < 4; k++)
-        {
+        for (k = 0; k < 4; k++) {
             EEE[k] = EE[k] + EE[7 - k];
             EEO[k] = EE[k] - EE[7 - k];
         }
@@ -338,21 +326,18 @@ static void partial_butterfly32(const int16_t* src, int16_t* dst, int shift, int
         dst[16 * line] = (int16_t)((g_t32[16][0] * EEEE[0] + g_t32[16][1] * EEEE[1] + add) >> shift);
         dst[8 * line] = (int16_t)((g_t32[8][0] * EEEO[0] + g_t32[8][1] * EEEO[1] + add) >> shift);
         dst[24 * line] = (int16_t)((g_t32[24][0] * EEEO[0] + g_t32[24][1] * EEEO[1] + add) >> shift);
-        for (k = 4; k < 32; k += 8)
-        {
+        for (k = 4; k < 32; k += 8) {
             dst[k * line] = (int16_t)((g_t32[k][0] * EEO[0] + g_t32[k][1] * EEO[1] + g_t32[k][2] * EEO[2] +
                                        g_t32[k][3] * EEO[3] + add) >> shift);
         }
 
-        for (k = 2; k < 32; k += 4)
-        {
+        for (k = 2; k < 32; k += 4) {
             dst[k * line] = (int16_t)((g_t32[k][0] * EO[0] + g_t32[k][1] * EO[1] + g_t32[k][2] * EO[2] +
                                        g_t32[k][3] * EO[3] + g_t32[k][4] * EO[4] + g_t32[k][5] * EO[5] +
                                        g_t32[k][6] * EO[6] + g_t32[k][7] * EO[7] + add) >> shift);
         }
 
-        for (k = 1; k < 32; k += 2)
-        {
+        for (k = 1; k < 32; k += 2) {
             dst[k * line] = (int16_t)((g_t32[k][0] * O[0] + g_t32[k][1] * O[1] + g_t32[k][2] * O[2] + g_t32[k][3] * O[3] +
                                        g_t32[k][4] * O[4] + g_t32[k][5] * O[5] + g_t32[k][6] * O[6] + g_t32[k][7] * O[7] +
                                        g_t32[k][8] * O[8] + g_t32[k][9] * O[9] + g_t32[k][10] * O[10] + g_t32[k][11] *
@@ -371,22 +356,6 @@ void ff_vca_dct4_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 8;
 
     ALIGN_VAR_32(int16_t, coef[4 * 4]);
-    //ALIGN_VAR_32(int16_t, block[4 * 4]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(4*4*sizeof(int16_t));    
-    //block=av_malloc(4*4*sizeof(int16_t));    
-
-
-    //for (int i = 0; i < 4; i++)
-    //{
-    //    memcpy(&block[i * 4], &src[i * srcStride], 4 * sizeof(int16_t));
-    //}
-
-    //block = av_memdup(src, 4 * 4 * sizeof(int16_t));
-
-    //memcpy(block, src, 4 * 4 * sizeof(int16_t));
-
 
     partial_butterfly4(block, coef, shift_1st, 4);
     partial_butterfly4(coef, dst, shift_2nd, 4);
@@ -398,20 +367,6 @@ void ff_vca_dct8_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 9;
 
     ALIGN_VAR_32(int16_t, coef[8 * 8]);
-    //ALIGN_VAR_32(int16_t, block[8 * 8]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(8*8*sizeof(int16_t));    
-    //block=av_malloc(8*8*sizeof(int16_t));    
-    //memcpy(block, src, 8 * 8 * sizeof(int16_t));
-
-
-    //for (int i = 0; i < 8; i++)
-    //{
-    //    memcpy(&block[i * 8], &src[i * srcStride], 8 * sizeof(int16_t));
-    //}
-
-    //block = av_memdup(src, 8 * 8 * sizeof(int16_t));
 
     partial_butterfly8(block, coef, shift_1st, 8);
     partial_butterfly8(coef, dst, shift_2nd, 8);
@@ -423,14 +378,6 @@ void ff_vca_dct16_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 10;
 
     ALIGN_VAR_32(int16_t, coef[16 * 16]);
-    //ALIGN_VAR_32(int16_t, block[16 * 16]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(16*16*sizeof(int16_t));
-    //block=av_malloc(16*16*sizeof(int16_t));
-
-    //block = av_memdup(src, 16 * 16 * sizeof(int16_t));
-    //memcpy(block, src, 16 * 16 * sizeof(int16_t));
 
     partial_butterfly16(block, coef, shift_1st, 16);
     partial_butterfly16(coef, dst, shift_2nd, 16);
@@ -442,19 +389,6 @@ void ff_vca_dct32_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 11;
 
     ALIGN_VAR_32(int16_t, coef[32 * 32]);
-    //ALIGN_VAR_32(int16_t, block[32 * 32]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(32*32*sizeof(int16_t));    
-    //block=av_malloc(32*32*sizeof(int16_t));    
-
-    //for (int i = 0; i < 32; i++)
-    //{
-    //    memcpy(&block[i * 32], &src[i * srcStride], 32 * sizeof(int16_t));
-    //}
-
-    //memcpy(block, src, 32 * 32 * sizeof(int16_t));
-    //block = av_memdup(src, 32 * 32 * sizeof(int16_t));
 
     partial_butterfly32(block, coef, shift_1st, 32);
     partial_butterfly32(coef, dst, shift_2nd, 32);
@@ -464,17 +398,12 @@ void ff_vca_lowpass_dct8_c(const int16_t* src, int16_t* dst, int bit_depth)
 {
     ALIGN_VAR_32(int16_t, coef[4 * 4]);
     ALIGN_VAR_32(int16_t, avg_block[4 * 4]);
-    //int16_t* coef;
-    //int16_t* avg_block;
-    //coef=av_malloc(4*4*sizeof(int16_t));    
-    //avg_block=av_malloc(4*4*sizeof(int16_t));    
     
     int16_t totalSum = 0;
     int16_t sum = 0;
     
     for (int i = 0; i < 4; i++)
-        for (int j =0; j < 4; j++)
-        {
+        for (int j =0; j < 4; j++) {
             // Calculate average of 2x2 cells
             sum = src[2*i*8 + 2*j] + src[2*i*8 + 2*j + 1]
                     + src[(2*i+1)*8 + 2*j] + src[(2*i+1)*8 + 2*j + 1];
@@ -483,17 +412,10 @@ void ff_vca_lowpass_dct8_c(const int16_t* src, int16_t* dst, int bit_depth)
             totalSum += sum; // use to calculate total block average
         }
 
-    //dct4
     ff_vca_dct4_c(avg_block, coef, bit_depth);
-    //(*s_dct4x4)(avg_block, coef, 4);
-
-    //dst = av_memdup(src, 32 * 32 * sizeof(int16_t));
 
     memset(dst, 0, 64 * sizeof(int16_t));
-    for (int i = 0; i < 4; i++)
-    {
-        //int16_t* tmp = &dst[i * 8]; 
-        //tmp = av_memdup(&coef[i * 4], 4 * sizeof(int16_t));
+    for (int i = 0; i < 4; i++) {
         memcpy(&dst[i * 8], &coef[i * 4], 4 * sizeof(int16_t));
     }
     
@@ -506,17 +428,11 @@ void ff_vca_lowpass_dct16_c(const int16_t* src, int16_t* dst, int bit_depth)
 {
     ALIGN_VAR_32(int16_t, coef[8 * 8]);
     ALIGN_VAR_32(int16_t, avg_block[8 * 8]);
-    //int16_t* coef;
-    //int16_t* avg_block;
-    //coef=av_malloc(8*8*sizeof(int16_t));    
-    //avg_block=av_malloc(8*8*sizeof(int16_t));   
-
 
     int32_t totalSum = 0;
     int16_t sum = 0;
     for (int i = 0; i < 8; i++)
-        for (int j =0; j < 8; j++)
-        {
+        for (int j =0; j < 8; j++) {
             sum = src[2*i*16 + 2*j] + src[2*i*16 + 2*j + 1]
                     + src[(2*i+1)*16 + 2*j] + src[(2*i+1)*16 + 2*j + 1];
             avg_block[i*8 + j] = sum >> 2;
@@ -524,16 +440,11 @@ void ff_vca_lowpass_dct16_c(const int16_t* src, int16_t* dst, int bit_depth)
             totalSum += sum;
         }
 
-    //(*s_dct8x8)(avg_block, coef, 8);
-
     ff_vca_dct8_c(avg_block, coef, bit_depth);
-
 
     memset(dst, 0, 256 * sizeof(int16_t));
     for (int i = 0; i < 8; i++)
     {
-        //int16_t* tmp = &dst[i * 16]; 
-        //tmp = av_memdup(&coef[i * 8], 8 * sizeof(int16_t));
         memcpy(&dst[i * 16], &coef[i * 8], 8 * sizeof(int16_t));
     }
     dst[0] = (int16_t)(totalSum >> 1);
@@ -543,16 +454,11 @@ void ff_vca_lowpass_dct32_c(const int16_t* src, int16_t* dst, int bit_depth)
 {
     ALIGN_VAR_32(int16_t, coef[16 * 16]);
     ALIGN_VAR_32(int16_t, avg_block[16 * 16]);
-    //int16_t* coef;
-    //int16_t* avg_block;
-    //coef=av_malloc(16*16*sizeof(int16_t));    
-    //avg_block=av_malloc(16*16*sizeof(int16_t));   
-   
+
     int32_t totalSum = 0;
     int16_t sum = 0;
     for (int i = 0; i < 16; i++)
-        for (int j =0; j < 16; j++)
-        {
+        for (int j =0; j < 16; j++) {
             sum = src[2*i*32 + 2*j] + src[2*i*32 + 2*j + 1]
                     + src[(2*i+1)*32 + 2*j] + src[(2*i+1)*32 + 2*j + 1];
             avg_block[i*16 + j] = sum >> 2;
@@ -562,26 +468,20 @@ void ff_vca_lowpass_dct32_c(const int16_t* src, int16_t* dst, int bit_depth)
 
     ff_vca_dct16_c(avg_block, coef, bit_depth);
  
-    //(*s_dct16x16)(avg_block, coef, 16);
-
     memset(dst, 0, 1024 * sizeof(int16_t));
-    for (int i = 0; i < 16; i++)
-    {
-        //int16_t* tmp = &dst[i * 32]; 
-        //tmp = av_memdup(&coef[i * 16], 16 * sizeof(int16_t));
+    for (int i = 0; i < 16; i++) {
         memcpy(&dst[i * 32], &coef[i * 16], 16 * sizeof(int16_t));
     }
     dst[0] = (int16_t)(totalSum >> 3);
 }
 
 
-uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass)
+uint32_t ff_calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass)
 {
     uint32_t weighted_sum = 0;
 
     uint16_t* weights_matrix = weights_dct32;
-    switch (blocksize)
-    {
+    switch (blocksize) {
         case 32:
             weights_matrix = weights_dct32;
             break;
@@ -593,12 +493,8 @@ uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enab
             break;
     }
 
-    for (unsigned i = 0; i < blocksize * blocksize; i++)
-    {
-        //int16_t val = coeffBuffer[i];
-        //uint32_t absVal = (val < 0) ? -(int32_t)val : (int32_t)val;
-        //uint32_t weightedCoeff = (uint32_t)((weightFactorMatrix[i] * absVal) >> 8);
-        uint32_t weighted_coeff = (uint32_t)((weights_matrix[i] * safe_abs(coeff_buffer[i])) >> 8);
+    for (unsigned i = 0; i < blocksize * blocksize; i++) {
+        uint32_t weighted_coeff = (uint32_t)((weights_matrix[i] * SAFE_ABS(coeff_buffer[i])) >> 8);
         weighted_sum += weighted_coeff;
     }
 
@@ -606,4 +502,116 @@ uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enab
         weighted_sum *= 2;
 
     return weighted_sum;
+}
+
+void ff_calc_weighted_coeff_w_diff(unsigned blocksize, int16_t *coeff_buffer, uint32_t *energy_weight, uint32_t *energy_weight_prev,
+                                   int offset, int enable_lowpass, int is_first_frame, uint32_t *weight, double *weight_diff)
+{
+    uint32_t weighted_sum = 0;
+    double diff_weight_sum = 0;
+    int i = 0u;
+
+    uint16_t* weights_matrix = weights_dct32;
+    switch (blocksize) {
+        case 32:
+            weights_matrix = weights_dct32;
+            break;
+        case 16:
+            weights_matrix = weights_dct16;
+            break;
+        case 8:
+            weights_matrix = weights_dct8;
+            break;
+    }
+
+    for (unsigned i = 0; i < blocksize * blocksize; i++) {
+            uint32_t weighted_coeff = (uint32_t)((weights_matrix[i] * SAFE_ABS(coeff_buffer[i])) >> 8);
+            energy_weight[i + offset] = weighted_coeff;
+            weighted_sum += weighted_coeff;
+    }
+
+    if(!is_first_frame) {
+        for (unsigned i = 0; i < blocksize * blocksize; i++) {
+                double weight_diff = abs((int)energy_weight[i + offset] - (int)energy_weight_prev[i + offset]);
+                diff_weight_sum += weight_diff;
+        }
+    }
+
+    if (blocksize >= 16 && enable_lowpass)
+        weighted_sum *= 2;
+
+    *weight = weighted_sum;
+    *weight_diff = diff_weight_sum;
+}
+
+static void copy_vals_wo_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer)
+{
+    if (pxl_depth == 1)
+    {
+        uint8_t *srcptr = src;
+        for (unsigned y = 0; y < blocksize; y++)
+            for (unsigned x = 0; x < blocksize; x++)
+                *(buffer++) = (int16_t)srcptr[x + stride*y];
+    } else {
+        uint16_t *srcptr = (uint16_t *) src;
+        const unsigned bytes_per_line = blocksize * 2;
+        for (unsigned y = 0; y < blocksize; ++y)
+        {
+            memcpy(buffer, srcptr, blocksize * sizeof(uint16_t));
+            srcptr += stride / 2;
+            buffer += blocksize;
+        }
+    }
+}
+
+static void copy_vals_w_padding(unsigned pxl_depth, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer, unsigned padding_r, unsigned padding_b)
+{
+    unsigned y          = 0;
+    int16_t *buffer_last_line = buffer;
+    
+    if (pxl_depth == 1) {
+        for (; y < blocksize - padding_b; y++, src += stride) {
+            unsigned x     = 0;
+            buffer_last_line = buffer;
+            for (; x < blocksize - padding_r; x++)
+                *(buffer++) = (int16_t)(src[x]);
+            const int16_t last = (int16_t)(src[x]);
+            for (; x < blocksize; x++)
+                *(buffer++) = last;
+        }
+        for (; y < blocksize; y++) {
+            for (unsigned x = 0; x < blocksize; x++)
+                *(buffer++) = (buffer_last_line[x]);
+        }        
+    } else {
+        uint16_t *srcptr = (uint16_t*)(src);
+        for (; y < blocksize - padding_b; y++) {
+            unsigned x     = 0;
+            buffer_last_line = buffer;
+
+            const unsigned nr_vals_copy = blocksize - padding_r;
+            memcpy(buffer, srcptr, nr_vals_copy * sizeof(uint16_t));
+
+            const uint16_t last = srcptr[nr_vals_copy - 1];
+            for (unsigned x = nr_vals_copy; x < blocksize; x++)
+                buffer[x] = last;
+
+            buffer += blocksize;
+            srcptr += stride / 2;
+        }
+        for (; y < blocksize; y++) {
+            const unsigned nr_bytes_copy = blocksize * 2;
+            memcpy(buffer, buffer_last_line, blocksize * sizeof(uint16_t));
+            buffer += blocksize;
+        }
+    }
+}
+
+void ff_copy_vals_buffer(unsigned pxl_depth, unsigned offset, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer, unsigned padding_r, unsigned padding_b)
+{
+    src += offset;
+    if (padding_r == 0 && padding_b == 0)
+        copy_vals_wo_padding(pxl_depth, blocksize, src, stride, buffer);
+    else
+        copy_vals_w_padding(pxl_depth, blocksize, src, stride, buffer, padding_r, padding_b);
 }

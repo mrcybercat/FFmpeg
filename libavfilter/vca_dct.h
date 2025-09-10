@@ -21,9 +21,13 @@
  * functions and constants for descrete cosine transform for VCA
  */
 
+#include "libavutil/mem.h"
+#include "filters.h"
+
 #include "avfilter.h"
 #include "libavutil/eval.h"
 #include "libavformat/avio.h"
+#include "filters.h"
 
 #ifndef AVFILTER_VCADCT_H
 #define AVFILTER_VCADCT_H
@@ -56,6 +60,9 @@ typedef struct VCAResults {
     uint32_t *energy_prev;
     double *energy_dif;
 
+    uint32_t *energy_weight_pxl;
+    uint32_t *energy_weight_pxl_prev;
+
     // results
     double max_h;
     double max_E;
@@ -72,9 +79,11 @@ typedef struct VCAContext {
     AVIOContext *avio_context;
     void (*print)(AVFilterContext *ctx, int lvl, const char *msg, ...); // av_printf_format(2, 3);
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
+    void (*perform_xvca)(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl, struct VCAContext *v, int plane_i, double* h, uint32_t* E);
 
     // options 
     unsigned blocksize;
+    int enable_evca;
     int enable_lowpass;
     int enable_chroma;
     int enable_texture;
@@ -103,7 +112,10 @@ static const int16_t g_t8[8][8];
 static const int16_t g_t16[16][16];
 static const int16_t g_t32[32][32];
 
-uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass);
+uint32_t ff_calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass);
+
+void ff_calc_weighted_coeff_w_diff(unsigned blocksize, int16_t *coeff_buffer, uint32_t *energy_weight, uint32_t *energy_weight_prev,
+                                   int offset, int enable_lowpass, int is_first_frame, uint32_t *weight, double *weight_diff);
 
 void ff_vca_dct4_c(const int16_t* src, int16_t* dst, int bit_depth);
 
@@ -120,6 +132,8 @@ void ff_vca_lowpass_dct16_c(const int16_t* src, int16_t* dst, int bit_depth);
 void ff_vca_lowpass_dct32_c(const int16_t* src, int16_t* dst, int bit_depth);
 
 int ff_vca_dct_init_x86(VCAContext *v);
+
+void ff_copy_vals_buffer(unsigned pxl_depth, unsigned offset, unsigned blocksize, uint8_t *src, unsigned stride, int16_t *buffer, unsigned padding_r, unsigned padding_b);
 
 #endif
 
