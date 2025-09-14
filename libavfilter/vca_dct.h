@@ -38,6 +38,14 @@
 #define ALIGN_VAR_32(T, var) __declspec(align(32)) T var
 #endif
 
+enum VCAAlgorithmType {
+    ALGO_STANDARD_VCA,   // 
+    ALGO_ENHANCED_VCA,   // 
+    ALGO_STEREO_VCA,     //
+    ALGO_INTER_VCA,      //
+};
+
+
 typedef struct VCAPlaneInfo {
     int pxl_depth;
     int bit_depth;
@@ -60,10 +68,14 @@ typedef struct VCAResults {
     uint32_t *energy_prev;
     double *energy_dif;
 
+    // EVCA fields
     uint32_t *energy_weight_pxl;
     uint32_t *energy_weight_pxl_prev;
 
-    // results
+    // SVCA fields
+    uint32_t **energy_prev_stereo;
+
+    // results summary
     double max_h;
     double max_E;
     
@@ -79,27 +91,27 @@ typedef struct VCAContext {
     AVIOContext *avio_context;
     void (*print)(AVFilterContext *ctx, int lvl, const char *msg, ...); // av_printf_format(2, 3);
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
-    void (*perform_xvca)(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl, struct VCAContext *v, int plane_i, double* h, uint32_t* E);
+    void (*perform_xvca)(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl, struct VCAContext *v, int plane_i);
 
     // options 
+    int algo;                   // < VCAAlgorithmType
     unsigned blocksize;
-    int enable_evca;
     int enable_lowpass;
     int enable_chroma;
     int enable_texture;
     int enable_simd;
     int summary;
-    int verbose;
+    //int verbose;
     int yuview;
     int n_frames;
     char *file_str;
 
     // video frame properties
-    VCAPlaneInfo **vca_plane;
+    VCAPlaneInfo **plane;
     int n_frames_processed;
 
     // results
-    VCAResults **vca_result;
+    VCAResults **result;
 } VCAContext;
 
 
@@ -111,6 +123,9 @@ static const int16_t g_t4[4][4];
 static const int16_t g_t8[8][8];
 static const int16_t g_t16[16][16];
 static const int16_t g_t32[32][32];
+
+static const double E_norm_factor = 90;
+static const double h_norm_factor = 18;
 
 uint32_t ff_calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enable_lowpass);
 

@@ -46,6 +46,6 @@ typedef struct ThreadDataVCA {
 } ThreadDataVCA;
 
 void ff_perform_vca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
-                        VCAContext *v, int plane_i, double* h, uint32_t* E);
+                    VCAContext *v, int plane_i);
 
 #endif

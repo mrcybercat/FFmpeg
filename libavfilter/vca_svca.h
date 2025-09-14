@@ -25,31 +25,30 @@
 #include "avfilter.h"
 #include "libavutil/eval.h"
 #include "libavformat/avio.h"
+#include "libavutil/stereo3d.h"
 
 #include "vca_dct.h"
 
-#ifndef AVFILTER_EVCA_H
-#define AVFILTER_EVCA_H
+#ifndef AVFILTER_SVCA_H
+#define AVFILTER_SVCA_H
 
-typedef struct ThreadDataEVCA {
+typedef struct ThreadDataSVCA {
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
     int stride;
     int blocksize;
 
     int enable_lowpass;
-    int is_first_frame;
 
     uint8_t *src;
 
     VCAPlaneInfo *plane;
     VCAResults *result;
     
-    uint32_t *partial_sums_E;
-    double *partial_sums_h;
-} ThreadDataEVCA;
+    uint32_t *partial_sums;
+} ThreadDataSVCA;
 
 
-void ff_perform_evca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
+void ff_perform_svca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
                         VCAContext *v, int plane_i);
 
 #endif

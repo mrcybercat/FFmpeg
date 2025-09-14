@@ -20,10 +20,6 @@
 #include "vca_dct.h"
 #include "vca_vca.h"
 
-
-static const double E_norm_factor = 90;
-static const double h_norm_factor = 18;
-
 static uint32_t calc_energy_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, 
                                     int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
                                     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
@@ -201,28 +197,41 @@ static double calc_energy_diff(VCAPlaneInfo *plane, VCAResults *result)
 
 
 void ff_perform_vca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
-                        VCAContext *v, int plane_i, double* h, uint32_t* E)
-{
-    E[plane_i] = calc_energy(ctx, in->linesize[plane_i], in->data[plane_i], v->vca_plane[plane_i], v->vca_result[plane_i], v->blocksize, v->enable_lowpass, v->perform_dct);
+                        VCAContext *v, int plane_i)
+{   
+    uint32_t E = 0;
+    double h = 0;
+
+    E = calc_energy(ctx, in->linesize[plane_i], in->data[plane_i], v->plane[plane_i], v->result[plane_i], v->blocksize, v->enable_lowpass, v->perform_dct);
     // On first frame instead of calculating difference assign difference to 0
     if (inl->frame_count_out != 0)
-        h[plane_i] = calc_energy_diff(v->vca_plane[plane_i], v->vca_result[plane_i]);
+        h = calc_energy_diff(v->plane[plane_i], v->result[plane_i]);
     else
-        h[plane_i] = 0;
+        h = 0;
     
     // At the end copy current energy to the previous
-    memcpy(v->vca_result[plane_i]->energy_prev ,v->vca_result[plane_i]->energy, v->vca_plane[plane_i]->n_blocks * sizeof(uint32_t));
+    memcpy(v->result[plane_i]->energy_prev ,v->result[plane_i]->energy, v->plane[plane_i]->n_blocks * sizeof(uint32_t));
 
     if (v->summary) {
-        v->vca_result[plane_i]->min_E  = v->n_frames_processed == 0 ? E[plane_i] : FFMIN(E[plane_i], v->vca_result[plane_i]->min_E);
-        v->vca_result[plane_i]->min_h  = v->n_frames_processed == 0 ? h[plane_i] : FFMIN(h[plane_i], v->vca_result[plane_i]->min_h);
+        v->result[plane_i]->min_E  = v->n_frames_processed == 0 ? E : FFMIN(E, v->result[plane_i]->min_E);
+        v->result[plane_i]->min_h  = v->n_frames_processed == 0 ? h : FFMIN(h, v->result[plane_i]->min_h);
         
-        v->vca_result[plane_i]->max_E = FFMAX(E[plane_i], v->vca_result[plane_i]->max_E);
-        v->vca_result[plane_i]->max_h = FFMAX(h[plane_i], v->vca_result[plane_i]->max_h);
+        v->result[plane_i]->max_E = FFMAX(E, v->result[plane_i]->max_E);
+        v->result[plane_i]->max_h = FFMAX(h, v->result[plane_i]->max_h);
 
-        v->vca_result[plane_i]->energy_frames[inl->frame_count_out] = E[plane_i];
-        v->vca_result[plane_i]->energy_dif_frames[inl->frame_count_out] = h[plane_i];
+        v->result[plane_i]->energy_frames[inl->frame_count_out] = E;
+        v->result[plane_i]->energy_dif_frames[inl->frame_count_out] = h;
     }
+
+    // Dump info;
+    v->print(ctx, AV_LOG_INFO,
+        "%4"PRId64,
+        inl->frame_count_out);
+    v->print(ctx, AV_LOG_INFO,
+            ",%d,%f",
+            E, h);
+
+    v->print(ctx, AV_LOG_INFO, "\n");
 }
 
 

@@ -40,6 +40,7 @@
 #include "vca_dct.h"
 #include "vca_vca.h"
 #include "vca_evca.h"
+#include "vca_svca.h"
 
 #define OFFSET(x) offsetof(VCAContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
@@ -48,23 +49,29 @@ static const AVOption vca_options[] = {
     // Analysis config                                      
     { "blocksize", "Set size of block", OFFSET(blocksize), AV_OPT_TYPE_INT, {.i64=32}, 8, 32, FLAGS },
     { "n", "Set the frames batch size", OFFSET(n_frames), AV_OPT_TYPE_INT, {.i64=500}, 2, INT_MAX, FLAGS },
-    { "evca", "Use Enhanced Video Complexity Analyzer", OFFSET(enable_evca), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     // Performance
     { "lowpass", "Enable low-pass DCT", OFFSET(enable_lowpass), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     { "texture", "Enable analysis of texture", OFFSET(enable_texture), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     { "chroma", "Enable analysis of chroma channels", OFFSET(enable_chroma), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     { "simd", "Enable hardware acceralation with SIMD", OFFSET(enable_simd), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     // Output
+    // Considering depricating summary option 
     { "summary", "Print summary of metrics over whole video", OFFSET(summary), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
-    { "verbose", "Verbose logging option", OFFSET(verbose), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     { "file", "Set file where to print analysis information", OFFSET(file_str), AV_OPT_TYPE_STRING, {.str=NULL}, 0, 0, FLAGS },
     //{ "yuview", "Ignore extension detection and force output YUView stats to file", OFFSET(yuview), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
-     
+    // Algos 
+    { "algo", "Alalysis algorithm to use", OFFSET(algo), AV_OPT_TYPE_INT,
+        { .i64 = ALGO_STANDARD_VCA }, 0, INT_MAX, .flags = FLAGS, .unit = "algo" },
+    { "vca", "Standard VCA is used (fastest)", 0, AV_OPT_TYPE_CONST,
+        { .i64 = ALGO_STANDARD_VCA }, INT_MIN, INT_MAX, .flags = FLAGS, .unit = "algo" },
+    { "evca", "Enhanced VCA is used (less perfomance, better corelation)", 0, AV_OPT_TYPE_CONST,
+        { .i64 = ALGO_ENHANCED_VCA }, INT_MIN, INT_MAX, .flags = FLAGS, .unit = "algo" },
+    { "svca", "Stereoscopic VCA is used (intended only for stereoscopic videos)", 0, AV_OPT_TYPE_CONST,
+        { .i64 = ALGO_STEREO_VCA }, INT_MIN, INT_MAX, .flags = FLAGS, .unit = "algo" },
+    { "ivca", "Inter-relation-aware VCA is used (slightly less perfomance, better corelation)", 0, AV_OPT_TYPE_CONST,
+        { .i64 = ALGO_INTER_VCA }, INT_MIN, INT_MAX, .flags = FLAGS, .unit = "algo" },
     { NULL }
 };
-
-static const double E_norm_factor = 90;
-static const double h_norm_factor = 18;
 
 AVFILTER_DEFINE_CLASS(vca);
 
@@ -105,55 +112,19 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     VCAContext *v = ctx->priv;
     FilterLink *inl = ff_filter_link(inlink);
     int planes = v->enable_chroma ? 3 : 1;
+
+    av_log(ctx, AV_LOG_ERROR,
+       "ctx=%p ctx->priv=%p inlink=%p dst=%p\n",
+       ctx, ctx->priv, inlink, inlink->dst);
  
     if (v->n_frames_processed >= v->n_frames)
         return ff_filter_frame(inlink->dst->outputs[0], in);
-
-    uint32_t E[3];
-    double h[3];
     
     for (int i = 0; i < planes; i++)
-        v->perform_xvca(ctx, inlink, in, inl, v, i, h, E);
+        v->perform_xvca(ctx, inlink, in, inl, v, i);
 
     v->n_frames_processed++;
 
-    // Dump info;
-    if (v->verbose) {
-        v->print(ctx, AV_LOG_INFO,
-           "n:%4"PRId64" pts:%7s pts_time:%-7s duration:%7"PRId64
-           " duration_time:%-7s ",
-           inl->frame_count_out,
-           av_ts2str(in->pts), av_ts2timestr(in->pts, &inlink->time_base),
-           in->duration, av_ts2timestr(in->duration, &inlink->time_base));
-        v->print(ctx, AV_LOG_INFO,
-               "energy:%4"PRId32" energy difference:%06f",
-               E[0], h[0]);
-        if (v->enable_chroma) {
-            v->print(ctx, AV_LOG_INFO,
-                "energy U:%4"PRId32" energy difference U:%06f",
-                E[1], h[1]);
-            v->print(ctx, AV_LOG_INFO,
-                "energy V:%4"PRId32" energy difference V:%06f",
-                E[2], h[2]);
-        }       
-    } else {
-        v->print(ctx, AV_LOG_INFO,
-            "%4"PRId64,
-            inl->frame_count_out);
-        v->print(ctx, AV_LOG_INFO,
-                ",%d,%f",
-                E[0], h[0]);
-        if (v->enable_chroma) {
-            v->print(ctx, AV_LOG_INFO,
-                ",%d,%f",
-                E[1], h[1]);
-            v->print(ctx, AV_LOG_INFO,
-                ",%d,%f",
-                E[2], h[2]);
-        }       
-    }
-
-    v->print(ctx, AV_LOG_INFO, "\n");
     return ff_filter_frame(inlink->dst->outputs[0], in);
 }
 
@@ -165,15 +136,15 @@ static int config_input(AVFilterLink *inlink)
     int max_pixsteps[4];
     int planes;
 
-    v->vca_plane[0]->w_pxls_src = inlink->w;
-    v->vca_plane[0]->h_pxls_src = inlink->h;
+    v->plane[0]->w_pxls_src = inlink->w;
+    v->plane[0]->h_pxls_src = inlink->h;
 
     if (v->enable_chroma) {
-        v->vca_plane[1]->w_pxls_src = AV_CEIL_RSHIFT(inlink->w, desc->log2_chroma_w);
-        v->vca_plane[1]->h_pxls_src = AV_CEIL_RSHIFT(inlink->h, desc->log2_chroma_h);
+        v->plane[1]->w_pxls_src = AV_CEIL_RSHIFT(inlink->w, desc->log2_chroma_w);
+        v->plane[1]->h_pxls_src = AV_CEIL_RSHIFT(inlink->h, desc->log2_chroma_h);
 
-        v->vca_plane[2]->w_pxls_src = AV_CEIL_RSHIFT(inlink->w, desc->log2_chroma_w);
-        v->vca_plane[2]->h_pxls_src = AV_CEIL_RSHIFT(inlink->h, desc->log2_chroma_h);
+        v->plane[2]->w_pxls_src = AV_CEIL_RSHIFT(inlink->w, desc->log2_chroma_w);
+        v->plane[2]->h_pxls_src = AV_CEIL_RSHIFT(inlink->h, desc->log2_chroma_h);
 
         planes = 3;
     } else 
@@ -181,58 +152,61 @@ static int config_input(AVFilterLink *inlink)
 
     for (int i = 0; i < planes; i++) {
         // Inference of bit depth 
-        v->vca_plane[i]->bit_depth = desc->comp[i].depth;
+        v->plane[i]->bit_depth = desc->comp[i].depth;
         // Inference of pixel depth
         av_image_fill_max_pixsteps(max_pixsteps, NULL, desc);
-        v->vca_plane[i]->pxl_depth = max_pixsteps[i];
+        v->plane[i]->pxl_depth = max_pixsteps[i];
 
-        v->vca_plane[i]->w_blocks = (v->vca_plane[i]->w_pxls_src + v->blocksize - 1) / v->blocksize;
-        v->vca_plane[i]->h_blocks = (v->vca_plane[i]->h_pxls_src + v->blocksize - 1) / v->blocksize;
+        v->plane[i]->w_blocks = (v->plane[i]->w_pxls_src + v->blocksize - 1) / v->blocksize;
+        v->plane[i]->h_blocks = (v->plane[i]->h_pxls_src + v->blocksize - 1) / v->blocksize;
 
-        v->vca_plane[i]->n_blocks = v->vca_plane[i]->w_blocks * v->vca_plane[i]->h_blocks;    
-                
-        v->vca_plane[i]->w_pxls = v->vca_plane[i]->w_blocks * v->blocksize;
-        v->vca_plane[i]->h_pxls = v->vca_plane[i]->h_blocks * v->blocksize;
-
-        // Free previous buffers in case they are allocated already
-        av_freep(&v->vca_result[i]->energy_prev);
-        av_freep(&v->vca_result[i]->energy_dif);
-        av_freep(&v->vca_result[i]->energy);
-
-        v->vca_result[i]->energy = av_malloc(v->vca_plane[i]->n_blocks * sizeof(uint32_t));
-        v->vca_result[i]->energy_prev = av_malloc(v->vca_plane[i]->n_blocks * sizeof(uint32_t));
-        v->vca_result[i]->energy_dif = av_malloc(v->vca_plane[i]->n_blocks * sizeof(double)); 
+        v->plane[i]->n_blocks = v->plane[i]->w_blocks * v->plane[i]->h_blocks;    
+        
+        v->plane[i]->w_pxls = v->plane[i]->w_blocks * v->blocksize;
+        v->plane[i]->h_pxls = v->plane[i]->h_blocks * v->blocksize;
+        if (v->algo != ALGO_STEREO_VCA) {
+            // Free previous buffers in case they are allocated already
+            av_freep(&v->result[i]->energy_prev);
+            av_freep(&v->result[i]->energy_dif);
+            av_freep(&v->result[i]->energy);
             
-        if (!v->vca_result[i]->energy || ! v->vca_result[i]->energy_prev || !v->vca_result[i]->energy_dif)
-            return AVERROR(ENOMEM);
+            v->result[i]->energy = av_malloc(v->plane[i]->n_blocks * sizeof(uint32_t));
+            v->result[i]->energy_prev = av_malloc(v->plane[i]->n_blocks * sizeof(uint32_t));
+            v->result[i]->energy_dif = av_malloc(v->plane[i]->n_blocks * sizeof(double)); 
+            if (!v->result[i]->energy || ! v->result[i]->energy_prev || !v->result[i]->energy_dif)
+                    return AVERROR(ENOMEM);
+        } else {
+            v->result[i]->energy_prev_stereo = av_malloc(2 * sizeof(uint32_t));
+        }
     }
 
-    if (v->enable_evca) {
+    if (v->algo == ALGO_ENHANCED_VCA) {
         for(int i = 0; i < planes; i++) {
-            av_freep(&v->vca_result[i]->energy_weight_pxl);
-            av_freep(&v->vca_result[i]->energy_weight_pxl_prev);
+            av_freep(&v->result[i]->energy_weight_pxl);
+            av_freep(&v->result[i]->energy_weight_pxl_prev);
 
-            size_t weight_sz = v->vca_plane[i]->n_blocks * v->blocksize * v->blocksize  * sizeof(uint32_t);
+            size_t weight_sz = v->plane[i]->n_blocks * v->blocksize * v->blocksize  * sizeof(uint32_t);
             
-            v->vca_result[i]->energy_weight_pxl = av_malloc(weight_sz);
-            v->vca_result[i]->energy_weight_pxl_prev = av_malloc(weight_sz);
+            v->result[i]->energy_weight_pxl = av_malloc(weight_sz);
+            v->result[i]->energy_weight_pxl_prev = av_malloc(weight_sz);
 
-            if (!v->vca_result[i]->energy_weight_pxl || !v->vca_result[i]->energy_weight_pxl_prev)
+            if (!v->result[i]->energy_weight_pxl || !v->result[i]->energy_weight_pxl_prev)
                 return AVERROR(ENOMEM);
         }        
     }
 
-    if (!v->verbose) {
+    if(v->algo != ALGO_STEREO_VCA)
         v->print(ctx, AV_LOG_INFO, "POC,E,h");
-        if (v->enable_texture)
-            v->print(ctx, AV_LOG_INFO, ",L");
-        if (v->enable_chroma)
-            v->print(ctx, AV_LOG_INFO, ",EV,hV,EU,hE");
-        if (v->enable_chroma && v->enable_texture)
-            v->print(ctx, AV_LOG_INFO, ",avgV,avgU");
+    else
+        v->print(ctx, AV_LOG_INFO, "POC,E_l,h_l,E_r,h_r,s");
+    if (v->enable_texture)
+        v->print(ctx, AV_LOG_INFO, ",L");
+    if (v->enable_chroma)
+        v->print(ctx, AV_LOG_INFO, ",EV,hV,EU,hE");
+    if (v->enable_chroma && v->enable_texture)
+        v->print(ctx, AV_LOG_INFO, ",avgV,avgU");
 
-        v->print(ctx, AV_LOG_INFO, "\n");
-    }
+    v->print(ctx, AV_LOG_INFO, "\n");
 
     av_log(ctx, AV_LOG_INFO, "threads: %d\n", ff_filter_get_nb_threads(ctx));
 
@@ -247,41 +221,41 @@ static av_cold int init(AVFilterContext *ctx)
     int planes = v->enable_chroma ? 3 : 1;
 
     // allocate arrays of pointers
-    v->vca_result = av_calloc(planes, sizeof(*v->vca_result));
-    v->vca_plane  = av_calloc(planes, sizeof(*v->vca_plane));
-    if (!v->vca_result || !v->vca_plane)
+    v->result = av_calloc(planes, sizeof(*v->result));
+    v->plane  = av_calloc(planes, sizeof(*v->plane));
+    if (!v->result || !v->plane)
         return AVERROR(ENOMEM);
 
     // allocate each plane/result struct
     for (int i = 0; i < planes; i++) {
-        v->vca_result[i] = av_mallocz(sizeof(*v->vca_result[i]));
-        v->vca_plane[i]  = av_mallocz(sizeof(*v->vca_plane[i]));
+        v->result[i] = av_mallocz(sizeof(*v->result[i]));
+        v->plane[i]  = av_mallocz(sizeof(*v->plane[i]));
 
-        if (!v->vca_result[i] || !v->vca_plane[i]) {
+        if (!v->result[i] || !v->plane[i]) {
             // clean allocations on error
             for (int j = 0; j <= i; j++) {
-                av_freep(&v->vca_result[j]);
-                av_freep(&v->vca_plane[j]);
+                av_freep(&v->result[j]);
+                av_freep(&v->plane[j]);
             }
-            av_freep(&v->vca_result);
-            av_freep(&v->vca_plane);
+            av_freep(&v->result);
+            av_freep(&v->plane);
             return AVERROR(ENOMEM);
         }
     }
 
     if (v->summary) {
         for(int i = 0; i < planes; i++) {
-            av_freep(&v->vca_result[i]->energy_frames);
-            av_freep(&v->vca_result[i]->energy_dif_frames);
+            av_freep(&v->result[i]->energy_frames);
+            av_freep(&v->result[i]->energy_dif_frames);
             
-            v->vca_result[i]->energy_frames = av_malloc(v->n_frames * sizeof(uint32_t));
-            v->vca_result[i]->energy_dif_frames = av_malloc(v->n_frames * sizeof(double));
+            v->result[i]->energy_frames = av_malloc(v->n_frames * sizeof(uint32_t));
+            v->result[i]->energy_dif_frames = av_malloc(v->n_frames * sizeof(double));
 
-            if (!v->vca_result[i]->energy_frames || !v->vca_result[i]->energy_dif_frames)
+            if (!v->result[i]->energy_frames || !v->result[i]->energy_dif_frames)
                 return AVERROR(ENOMEM);
 
-            v->vca_result[i]->max_E = 0;
-            v->vca_result[i]->max_h = 0;
+            v->result[i]->max_E = 0;
+            v->result[i]->max_h = 0;
         }
     }
 
@@ -292,7 +266,24 @@ static av_cold int init(AVFilterContext *ctx)
     } else {
         v->print = print_log;
     }
-    v->perform_xvca = v->enable_evca ? ff_perform_evca : ff_perform_vca;
+
+    switch (v->algo)
+    {
+        case ALGO_STANDARD_VCA:
+            v->perform_xvca = ff_perform_vca;
+            break;
+        case ALGO_ENHANCED_VCA:
+            v->perform_xvca = ff_perform_evca;
+            break;
+        case ALGO_STEREO_VCA:
+            v->perform_xvca = ff_perform_svca;
+            break;
+        case ALGO_INTER_VCA:
+            v->perform_xvca = ff_perform_vca;
+            break;
+        default:
+            break;
+    }
     
     // v->perform_xvca = ff_perform_vca;
         
@@ -329,7 +320,9 @@ static av_cold int init(AVFilterContext *ctx)
     if (v->enable_simd) {
         #if ARCH_X86
         ret = ff_vca_dct_init_x86(v);
+
         if (ret != 0) {
+            av_log(ctx, AV_LOG_ERROR, "Error initialidzing SIMD functions");
             return ret;
         }
         #endif
@@ -361,8 +354,8 @@ static av_cold void uninit(AVFilterContext *ctx)
             double sumE = 0;
             double sumh = 0;
             for (int i = 0; i < n_frames; i++) {
-                sumE += v->vca_result[plane]->energy_frames[i];
-                sumh += v->vca_result[plane]->energy_dif_frames[i];
+                sumE += v->result[plane]->energy_frames[i];
+                sumh += v->result[plane]->energy_dif_frames[i];
             }
             double meanE = sumE / (double) n_frames;
             double meanh = sumh / (double) n_frames;
@@ -370,8 +363,8 @@ static av_cold void uninit(AVFilterContext *ctx)
             double sumstdE = 0;
             double sumstdh = 0;
             for (int i = 0; i < n_frames; i++) {
-                sumstdE += pow(v->vca_result[plane]->energy_frames[i] - meanh, 2);
-                sumstdh += pow(v->vca_result[plane]->energy_dif_frames[i] - meanE, 2);
+                sumstdE += pow(v->result[plane]->energy_frames[i] - meanh, 2);
+                sumstdh += pow(v->result[plane]->energy_dif_frames[i] - meanE, 2);
             }
             double stdevE = sqrt(sumstdE/(double) n_frames);
             double stdevh = sqrt(sumstdh/(double) n_frames);
@@ -381,16 +374,16 @@ static av_cold void uninit(AVFilterContext *ctx)
 
             v->print(ctx, AV_LOG_INFO,
                 "Energy -- Max: %f Min: %f Mean: %f Stdev: %f \n",
-                v->vca_result[plane]->max_E, v->vca_result[plane]->min_E, meanE, stdevE);
+                v->result[plane]->max_E, v->result[plane]->min_E, meanE, stdevE);
 
             v->print(ctx, AV_LOG_INFO,
                 "Energy dif -- Max: %f Min: %f Mean: %f Stdev: %f \n",
-                v->vca_result[plane]->max_h, v->vca_result[plane]->min_h, meanh, stdevh);
+                v->result[plane]->max_h, v->result[plane]->min_h, meanh, stdevh);
         }
 
-        av_freep(&v->vca_result[plane]->energy_dif);
-        av_freep(&v->vca_result[plane]->energy);
-        av_freep(&v->vca_result[plane]->energy_prev);
+        av_freep(&v->result[plane]->energy_dif);
+        av_freep(&v->result[plane]->energy);
+        av_freep(&v->result[plane]->energy_prev);
     }
 
     if (v->avio_context) {
