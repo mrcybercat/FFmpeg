@@ -113,10 +113,6 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     FilterLink *inl = ff_filter_link(inlink);
     int planes = v->enable_chroma ? 3 : 1;
 
-    av_log(ctx, AV_LOG_ERROR,
-       "ctx=%p ctx->priv=%p inlink=%p dst=%p\n",
-       ctx, ctx->priv, inlink, inlink->dst);
- 
     if (v->n_frames_processed >= v->n_frames)
         return ff_filter_frame(inlink->dst->outputs[0], in);
     
@@ -176,7 +172,15 @@ static int config_input(AVFilterLink *inlink)
             if (!v->result[i]->energy || ! v->result[i]->energy_prev || !v->result[i]->energy_dif)
                     return AVERROR(ENOMEM);
         } else {
-            v->result[i]->energy_prev_stereo = av_malloc(2 * sizeof(uint32_t));
+            v->sd = av_mallocz(sizeof(AVFrameSideData));
+            v->result[i]->energy_prev_stereo = av_malloc(2 * sizeof(*v->result[i]->energy_prev_stereo));
+
+            if (v->result[i]->energy_prev_stereo) {
+                v->result[i]->energy_prev_stereo[0] =
+                    av_malloc(v->plane[i]->n_blocks * sizeof(**v->result[i]->energy_prev_stereo));
+                v->result[i]->energy_prev_stereo[1] =
+                av_malloc(v->plane[i]->n_blocks * sizeof(**v->result[i]->energy_prev_stereo));
+            }
         }
     }
 

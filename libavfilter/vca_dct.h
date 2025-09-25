@@ -89,6 +89,8 @@ typedef struct VCAResults {
 typedef struct VCAContext {
     const AVClass *class;    
     AVIOContext *avio_context;
+    AVFrameSideData *sd;
+    
     void (*print)(AVFilterContext *ctx, int lvl, const char *msg, ...); // av_printf_format(2, 3);
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
     void (*perform_xvca)(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl, struct VCAContext *v, int plane_i);
