@@ -81,7 +81,7 @@ static void unpack_checkerboard(VCAPlaneInfo *plane, uint8_t *data, uint8_t *lef
             index++;
 
         }
-    plane->h_pxls_src = height / 2;
+    plane->w_pxls_src = height / 2;
 }
 
 static void unpack_lines(VCAPlaneInfo *plane, uint8_t* data, uint8_t* left_d, uint8_t* right_d, int width, int height, int stride)
@@ -108,10 +108,10 @@ static void unpack_collums(VCAPlaneInfo *plane, uint8_t* data, uint8_t* left_d, 
             index++;
         }
 
-    plane->h_pxls_src = width / 2;
+    plane->w_pxls_src = width / 2;
 }
 
-static int adjust_plane_info(VCAPlaneInfo *plane, VCAResults *result, int blocksize)
+static int init_adjust_plane_info(VCAPlaneInfo *plane, VCAResults *result, int blocksize)
 {
     plane->w_blocks = (plane->w_pxls_src + blocksize - 1) / blocksize;
     plane->h_blocks = (plane->h_pxls_src + blocksize - 1) / blocksize;
@@ -126,6 +126,7 @@ static int adjust_plane_info(VCAPlaneInfo *plane, VCAResults *result, int blocks
     av_freep(&result->energy_dif);
     av_freep(&result->energy);
 
+    
     if (result->energy_prev_stereo) {
         av_freep(&result->energy_prev_stereo[LEFT]);
         av_freep(&result->energy_prev_stereo[RIGHT]);   
@@ -149,6 +150,31 @@ static int adjust_plane_info(VCAPlaneInfo *plane, VCAResults *result, int blocks
     
     return 0;
 } 
+
+static int adjust_plane_info(VCAPlaneInfo *plane, VCAResults *result, int blocksize)
+{
+    plane->w_blocks = (plane->w_pxls_src + blocksize - 1) / blocksize;
+    plane->h_blocks = (plane->h_pxls_src + blocksize - 1) / blocksize;
+
+    plane->n_blocks = plane->w_blocks * plane->h_blocks;    
+                
+    plane->w_pxls = plane->w_blocks * blocksize;
+    plane->h_pxls = plane->h_blocks * blocksize;
+
+    // Free previous buffers in case they are allocated already
+    //av_freep(&result->energy_prev);
+    av_freep(&result->energy_dif);
+    av_freep(&result->energy);
+    
+    result->energy = av_malloc(plane->n_blocks * sizeof(uint32_t));
+    result->energy_dif = av_malloc(plane->n_blocks * sizeof(double)); 
+            
+    if (!result->energy || !result->energy_dif)
+        return AVERROR(ENOMEM);
+    
+    return 0;
+} 
+
 
 static int unpack_stereo3d(AVFrame *in, const AVStereo3D *stereo, VCAContext *v, VCAPlaneInfo *plane, VCAResults *result,
                            uint8_t *left_d, uint8_t *right_d, int plane_i, int width, int height) 
@@ -207,9 +233,6 @@ static int unpack_stereo3d(AVFrame *in, const AVStereo3D *stereo, VCAContext *v,
         case AV_PRIMARY_EYE_RIGHT:
     }
     */
-
-    adjust_plane_info(plane, result, v->blocksize);
-
     return 0;
 }
 
@@ -411,7 +434,9 @@ static void perform_svca_view(AVFilterContext *ctx, FilterLink *inl, VCAContext 
         *h = 0;
     
     // At the end copy current energy to the previous
-    memcpy(result->energy_prev_stereo[view], result->energy, plane->n_blocks * sizeof(uint32_t));
+    // memcpy(result->energy_prev_stereo[view], result->energy, plane->n_blocks * sizeof(uint32_t));
+
+     memcpy(result->energy_prev_stereo[view], result->energy, plane->n_blocks * sizeof(uint32_t));
 
 }
 
@@ -463,6 +488,11 @@ void ff_perform_svca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, Fi
     if(v->sd->type == AV_FRAME_DATA_STEREO3D){
         const AVStereo3D *stereo = (const AVStereo3D *)v->sd->data;
         int ret = unpack_stereo3d(in, stereo, v, pln_copy, v->result[plane_i], l_src, r_src, plane_i, width, height);
+
+        if(v->n_frames_processed == 0)
+            init_adjust_plane_info(pln_copy, v->result[plane_i], v->blocksize);
+        else
+            adjust_plane_info(pln_copy, v->result[plane_i], v->blocksize);
 
         if (ret != 0) {
             av_log(ctx, AV_LOG_ERROR, "Error unpacking stereographic video:ERROR_CODE");
