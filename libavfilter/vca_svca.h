@@ -32,6 +32,19 @@
 #ifndef AVFILTER_SVCA_H
 #define AVFILTER_SVCA_H
 
+
+void ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
+void ff_uninit_svca(VCAAlgoContext *ctx);
+
+typedef struct SVCAAlgoContext {
+    VCAAlgoContext base;
+    AVStereo3D *stereo;
+    uint32_t *energy;
+    double *energy_dif;
+    uint32_t **energy_prev_stereo;
+} SVCAAlgoContext;
+
 typedef struct ThreadDataSVCA {
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
     int stride;
@@ -42,13 +55,18 @@ typedef struct ThreadDataSVCA {
     uint8_t *src;
 
     VCAPlaneInfo *plane;
-    VCAResults *result;
-    
+    SVCAAlgoContext *algoctx;
+
     uint32_t *partial_sums;
 } ThreadDataSVCA;
 
 
-void ff_perform_svca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
-                        VCAContext *v, int plane_i);
+static const VCAAlgoVTable svca_vtable = {
+    .init_algo = ff_init_svca,
+    .perform_algo = ff_perform_svca,
+    .uninit_algo = ff_uninit_svca,
+};
+
+
 
 #endif

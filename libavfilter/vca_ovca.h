@@ -30,7 +30,18 @@
 #ifndef AVFILTER_VCA_H
 #define AVFILTER_VCA_H
 
-typedef struct ThreadDataVCA {
+void ff_init_ovca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+void ff_perform_ovca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
+void ff_uninit_ovca(VCAAlgoContext *ctx);
+
+typedef struct OVCAAlgoContext {
+    VCAAlgoContext base;
+    uint32_t *energy;
+    uint32_t *energy_prev;
+    double *energy_dif;
+} OVCAAlgoContext;
+
+typedef struct ThreadDataOVCA {
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
     int stride;
     int blocksize;
@@ -40,12 +51,21 @@ typedef struct ThreadDataVCA {
     uint8_t *src;
 
     VCAPlaneInfo *plane;
-    VCAResults *result;
+    OVCAAlgoContext *algoctx;
     
     uint32_t *partial_sums;
-} ThreadDataVCA;
+} ThreadDataOVCA;
 
-void ff_perform_vca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
-                    VCAContext *v, int plane_i);
+static const VCAAlgoVTable ovca_vtable = {
+    .init_algo = ff_init_ovca,
+    .perform_algo = ff_perform_ovca,
+    .uninit_algo = ff_uninit_ovca,
+};
+
 
 #endif
+
+// void ff_perform_vca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
+//                    VCAContext *v, int plane_i);
+
+

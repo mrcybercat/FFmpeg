@@ -18,9 +18,10 @@
  */
 
 #include "vca_dct.h"
-#include "vca_vca.h"
+#include "vca_ovca.h"
 
-static uint32_t calc_energy_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, 
+
+static uint32_t calc_energy_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, 
                                     int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
                                     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
 {
@@ -57,7 +58,7 @@ static uint32_t calc_energy_32_slice(int stride, uint8_t *src, VCAPlaneInfo *pla
     return  sliceTexture;
 }
 
-static uint32_t calc_energy_16_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, 
+static uint32_t calc_energy_16_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, 
                                     int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
                                     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
 {    
@@ -91,7 +92,7 @@ static uint32_t calc_energy_16_slice(int stride, uint8_t *src, VCAPlaneInfo *pla
     return sliceTexture;
 }
 
-static uint32_t calc_energy_8_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, 
+static uint32_t calc_energy_8_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, 
                                     int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
                                     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
 {
@@ -127,7 +128,7 @@ static uint32_t calc_energy_8_slice(int stride, uint8_t *src, VCAPlaneInfo *plan
 
 static int calc_energy_filter_slice(AVFilterContext *ctx, void *arg, int job, int nb_jobs)
 {
-    ThreadDataVCA *th = arg;
+    ThreadDataOVCA *th = arg;
 
     int block_row_start = (th->plane->h_blocks * job)     / nb_jobs;
     int block_row_end   = (th->plane->h_blocks * (job+1)) / nb_jobs;
@@ -137,15 +138,15 @@ static int calc_energy_filter_slice(AVFilterContext *ctx, void *arg, int job, in
 
     switch (th->blocksize) {
         case 32:
-            calc_energy_32_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass,
+            calc_energy_32_slice(th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass,
                                  slice_start, slice_end, &th->partial_sums[job], th->perform_dct);
             break;
         case 16:
-            calc_energy_16_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, 
+            calc_energy_16_slice(th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass, 
                                  slice_start, slice_end, &th->partial_sums[job], th->perform_dct);
             break;
         case 8:
-            calc_energy_8_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, 
+            calc_energy_8_slice(th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass, 
                                 slice_start, slice_end, &th->partial_sums[job], th->perform_dct);
             break;
         default:
@@ -155,20 +156,21 @@ static int calc_energy_filter_slice(AVFilterContext *ctx, void *arg, int job, in
 }
 
 
-static uint32_t calc_energy(AVFilterContext *ctx, int linesize, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int blocksize, int enable_lowpass, void* perform_dct)
+static uint32_t calc_energy(AVFilterContext *ctx, int linesize, uint8_t *src, VCAPlaneInfo *plane,
+                            OVCAAlgoContext *algoctx, int blocksize, int enable_lowpass, void* perform_dct)
 {
     uint32_t frameTexture = 0;
     int stride = linesize / plane->pxl_depth;
 
     int nb_threads = ff_filter_get_nb_threads(ctx);
 
-    ThreadDataVCA th = {
+    ThreadDataOVCA th = {
         .stride = stride,
         .blocksize = blocksize,
         .enable_lowpass = enable_lowpass,
         .src = src,
         .plane = plane,
-        .result = result,
+        .algoctx = algoctx,
         .partial_sums = av_calloc(nb_threads, sizeof(uint32_t)),
         .perform_dct = perform_dct
     };
@@ -183,7 +185,7 @@ static uint32_t calc_energy(AVFilterContext *ctx, int linesize, uint8_t *src, VC
     return (uint32_t)((double)frameTexture /(plane->n_blocks * E_norm_factor));
 }
 
-static double calc_energy_diff(VCAPlaneInfo *plane, VCAResults *result)
+static double calc_energy_diff(VCAPlaneInfo *plane, OVCAAlgoContext *result)
 {
     int block_i = 0u;
     double diff_sum = 0;
@@ -196,41 +198,56 @@ static double calc_energy_diff(VCAPlaneInfo *plane, VCAResults *result)
 }
 
 
-void ff_perform_vca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
-                        VCAContext *v, int plane_i)
+void ff_init_ovca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
+    OVCAAlgoContext *ovca = (OVCAAlgoContext *)ctx;
+
+    // Free previous buffers in case they are allocated already
+    av_freep(&ovca->energy_prev);
+    av_freep(&ovca->energy_dif);
+    av_freep(&ovca->energy);
+            
+    ovca->energy = av_malloc(n_blocks * sizeof(uint32_t));
+    ovca->energy_prev = av_malloc(n_blocks * sizeof(uint32_t));
+    ovca->energy_dif = av_malloc(n_blocks * sizeof(double)); 
+    if (!ovca->energy || ! ovca->energy_prev || !ovca->energy_dif)
+        return AVERROR(ENOMEM);
+}
+
+void ff_uninit_ovca(VCAAlgoContext *ctx) {
+    OVCAAlgoContext *ovca = (OVCAAlgoContext *)ctx;
+
+    av_freep(&ovca->energy_prev);
+    av_freep(&ovca->energy_dif);
+    av_freep(&ovca->energy);
+}
+
+
+void ff_perform_ovca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i)
 {   
     uint32_t E = 0;
     double h = 0;
 
-    E = calc_energy(ctx, in->linesize[plane_i], in->data[plane_i], v->plane[plane_i], v->result[plane_i], v->blocksize, v->enable_lowpass, v->perform_dct);
+    OVCAAlgoContext *ovca = (OVCAAlgoContext *) v->algoctx[plane_i];
+
+    E = calc_energy(ctx, in->linesize[plane_i], in->data[plane_i], v->plane[plane_i],
+                    ovca, v->blocksize, v->enable_lowpass, v->perform_dct);
+
     // On first frame instead of calculating difference assign difference to 0
     if (inl->frame_count_out != 0)
-        h = calc_energy_diff(v->plane[plane_i], v->result[plane_i]);
+        h = calc_energy_diff(v->plane[plane_i], ovca);
     else
         h = 0;
     
     // At the end copy current energy to the previous
-    memcpy(v->result[plane_i]->energy_prev ,v->result[plane_i]->energy, v->plane[plane_i]->n_blocks * sizeof(uint32_t));
+    memcpy(ovca->energy_prev, ovca->energy, v->plane[plane_i]->n_blocks * sizeof(uint32_t));
 
-    if (v->summary) {
-        v->result[plane_i]->min_E  = v->n_frames_processed == 0 ? E : FFMIN(E, v->result[plane_i]->min_E);
-        v->result[plane_i]->min_h  = v->n_frames_processed == 0 ? h : FFMIN(h, v->result[plane_i]->min_h);
-        
-        v->result[plane_i]->max_E = FFMAX(E, v->result[plane_i]->max_E);
-        v->result[plane_i]->max_h = FFMAX(h, v->result[plane_i]->max_h);
-
-        v->result[plane_i]->energy_frames[inl->frame_count_out] = E;
-        v->result[plane_i]->energy_dif_frames[inl->frame_count_out] = h;
-    }
-
-    // Dump info;
+    // Dump info
     v->print(ctx, AV_LOG_INFO,
-        "%4"PRId64,
-        inl->frame_count_out);
+            "%4"PRId64,
+            inl->frame_count_out);
     v->print(ctx, AV_LOG_INFO,
             ",%d,%f",
             E, h);
-
     v->print(ctx, AV_LOG_INFO, "\n");
 }
 

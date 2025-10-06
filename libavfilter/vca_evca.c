@@ -21,7 +21,7 @@
 #include "vca_dct.h"
 #include "vca_evca.h"
 
-static uint32_t calc_evca_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass, 
+static uint32_t calc_evca_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, EVCAAlgoContext *result, int enable_lowpass, 
                                      int is_first_frame, int slice_start, int slice_end, uint32_t *partial_sum_E, double *partial_sum_h,
                                      void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
 {
@@ -65,7 +65,7 @@ static uint32_t calc_evca_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane
     return  sliceTexture;
 }
 
-static uint32_t calc_evca_16_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass, 
+static uint32_t calc_evca_16_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, EVCAAlgoContext *result, int enable_lowpass, 
                                      int is_first_frame, int slice_start, int slice_end, uint32_t *partial_sum_E, double *partial_sum_h,
                                      void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
 {
@@ -108,7 +108,7 @@ static uint32_t calc_evca_16_slice(int stride, uint8_t *src, VCAPlaneInfo *plane
     return  sliceTexture;
 }
 
-static uint32_t calc_evca_8_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, VCAResults *result, int enable_lowpass, 
+static uint32_t calc_evca_8_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, EVCAAlgoContext *result, int enable_lowpass, 
                                      int is_first_frame, int slice_start, int slice_end, uint32_t *partial_sum_E, double *partial_sum_h,
                                      void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
 {
@@ -164,15 +164,15 @@ static int calc_evca_filter_slice(AVFilterContext *ctx, void *arg, int job, int 
 
     switch (th->blocksize) {
         case 32:
-            calc_evca_32_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, th->is_first_frame,
+            calc_evca_32_slice(th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass, th->is_first_frame,
                                slice_start, slice_end, &th->partial_sums_E[job], &th->partial_sums_h[job], th->perform_dct);
             break;
         case 16:
-            calc_evca_16_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, th->is_first_frame,
+            calc_evca_16_slice(th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass, th->is_first_frame,
                                slice_start, slice_end, &th->partial_sums_E[job], &th->partial_sums_h[job], th->perform_dct);
             break;
         case 8:
-            calc_evca_8_slice(th->stride, th->src, th->plane, th->result, th->enable_lowpass, th->is_first_frame, 
+            calc_evca_8_slice(th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass, th->is_first_frame, 
                               slice_start, slice_end, &th->partial_sums_E[job], &th->partial_sums_h[job], th->perform_dct);
             break;
         default:
@@ -181,8 +181,35 @@ static int calc_evca_filter_slice(AVFilterContext *ctx, void *arg, int job, int 
     return 0;
 }
 
-void ff_perform_evca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
-                     VCAContext *v, int plane_i)
+void ff_init_evca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
+    EVCAAlgoContext *evca = (EVCAAlgoContext *)ctx;
+
+    av_freep(&evca->energy);
+    av_freep(&evca->energy_weight_pxl);
+    av_freep(&evca->energy_weight_pxl_prev);
+    av_freep(&evca->energy_dif);
+
+    size_t weight_sz = n_blocks * blocksize * blocksize  * sizeof(uint32_t);
+            
+    evca->energy_weight_pxl = av_malloc(weight_sz);
+    evca->energy_weight_pxl_prev = av_malloc(weight_sz);        
+    evca->energy = av_malloc(n_blocks * sizeof(uint32_t));
+    evca->energy_dif = av_malloc(n_blocks * sizeof(double)); 
+
+    if (!evca->energy_weight_pxl || !evca->energy_weight_pxl_prev || !evca->energy || !evca->energy_dif)
+        return AVERROR(ENOMEM);
+}
+
+void ff_uninit_evca(VCAAlgoContext *ctx) {
+    EVCAAlgoContext *evca = (EVCAAlgoContext *)ctx;
+
+    av_freep(&evca->energy);
+    av_freep(&evca->energy_weight_pxl);
+    av_freep(&evca->energy_weight_pxl_prev);
+    av_freep(&evca->energy_dif);
+}
+
+void ff_perform_evca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i)
 {
     //calc_energy(ctx, in->linesize[plane_i], in->data[plane_i], v->plane[plane_i], v->result[plane_i], v->blocksize, v->enable_lowpass, v->perform_dct);
     // On first frame instead of calculating difference assign difference to 0
@@ -191,6 +218,9 @@ void ff_perform_evca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, Fi
 
     uint32_t E = 0;
     double h = 0;
+
+    EVCAAlgoContext *evca = (EVCAAlgoContext *) v->algoctx[plane_i];
+
 
     int is_first_frame = inl->frame_count_out == 0;
 
@@ -205,7 +235,7 @@ void ff_perform_evca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, Fi
         .is_first_frame = is_first_frame,
         .src = in->data[plane_i],
         .plane = v->plane[plane_i],
-        .result = v->result[plane_i],
+        .algoctx = evca,
         .partial_sums_E = av_calloc(nb_threads, sizeof(uint32_t)),
         .partial_sums_h = av_calloc(nb_threads, sizeof(double)),
         .perform_dct = v->perform_dct
@@ -227,21 +257,10 @@ void ff_perform_evca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, Fi
 
 
     // At the end copy current energy to the previous
-    memcpy(v->result[plane_i]->energy_weight_pxl_prev, v->result[plane_i]->energy_weight_pxl,
+    memcpy(evca->energy_weight_pxl_prev, evca->energy_weight_pxl,
            v->plane[plane_i]->n_blocks * v->blocksize * v->blocksize * sizeof(uint32_t));
 
-    if (v->summary) {
-        v->result[plane_i]->min_E  = v->n_frames_processed == 0 ? E : FFMIN(E, v->result[plane_i]->min_E);
-        v->result[plane_i]->min_h  = v->n_frames_processed == 0 ? h : FFMIN(h, v->result[plane_i]->min_h);
-        
-        v->result[plane_i]->max_E = FFMAX(E, v->result[plane_i]->max_E);
-        v->result[plane_i]->max_h = FFMAX(h, v->result[plane_i]->max_h);
-
-        v->result[plane_i]->energy_frames[inl->frame_count_out] = E;
-        v->result[plane_i]->energy_dif_frames[inl->frame_count_out] = h;
-    }
-
-    // Dump info;
+    // Dump info
     v->print(ctx, AV_LOG_INFO,
         "%4"PRId64,
         inl->frame_count_out);

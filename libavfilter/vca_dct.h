@@ -45,7 +45,6 @@ enum VCAAlgorithmType {
     ALGO_INTER_VCA,      //
 };
 
-
 typedef struct VCAPlaneInfo {
     int pxl_depth;
     int bit_depth;
@@ -62,39 +61,17 @@ typedef struct VCAPlaneInfo {
     int h_pxls;
 } VCAPlaneInfo;
 
-typedef struct VCAResults {
-    // globals
-    uint32_t *energy;
-    uint32_t *energy_prev;
-    double *energy_dif;
-
-    // EVCA fields
-    uint32_t *energy_weight_pxl;
-    uint32_t *energy_weight_pxl_prev;
-
-    // SVCA fields
-    uint32_t **energy_prev_stereo;
-
-    // results summary
-    double max_h;
-    double max_E;
-    
-    double min_h;
-    double min_E;
-
-    uint32_t *energy_frames;
-    double *energy_dif_frames;
-} VCAResults;
+typedef struct VCAAlgoContext {
+    const struct VCAAlgoVTable *vtable;
+} VCAAlgoContext;
 
 typedef struct VCAContext {
     const AVClass *class;    
     AVIOContext *avio_context;
-    AVFrameSideData *sd;
     
     void (*print)(AVFilterContext *ctx, int lvl, const char *msg, ...); // av_printf_format(2, 3);
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
-    void (*perform_xvca)(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl, struct VCAContext *v, int plane_i);
-
+    
     // options 
     int algo;                   // < VCAAlgorithmType
     unsigned blocksize;
@@ -102,19 +79,23 @@ typedef struct VCAContext {
     int enable_chroma;
     int enable_texture;
     int enable_simd;
-    int summary;
-    //int verbose;
     int yuview;
     int n_frames;
     char *file_str;
 
-    // video frame properties
-    VCAPlaneInfo **plane;
     int n_frames_processed;
 
-    // results
-    VCAResults **result;
+    // video frame properties
+    VCAPlaneInfo **plane;
+    // vca family algorithm relevant context (can also be thought of as intermediary results)
+    VCAAlgoContext **algoctx;
 } VCAContext;
+
+typedef struct VCAAlgoVTable {
+    void (*init_algo)(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+    void (*perform_algo)(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
+    void (*uninit_algo)(VCAAlgoContext *ctx);
+} VCAAlgoVTable;
 
 
 static const int16_t weights_dct8[64];

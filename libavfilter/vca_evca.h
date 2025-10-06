@@ -31,6 +31,18 @@
 #ifndef AVFILTER_EVCA_H
 #define AVFILTER_EVCA_H
 
+void ff_init_evca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+void ff_perform_evca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
+void ff_uninit_evca(VCAAlgoContext *ctx);
+
+typedef struct EVCAAlgoContext {
+    VCAAlgoContext base;
+    uint32_t *energy;
+    uint32_t *energy_weight_pxl;
+    uint32_t *energy_weight_pxl_prev;
+    double *energy_dif;
+} EVCAAlgoContext;
+
 typedef struct ThreadDataEVCA {
     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth);
     int stride;
@@ -42,14 +54,17 @@ typedef struct ThreadDataEVCA {
     uint8_t *src;
 
     VCAPlaneInfo *plane;
-    VCAResults *result;
+    EVCAAlgoContext *algoctx;
     
     uint32_t *partial_sums_E;
     double *partial_sums_h;
 } ThreadDataEVCA;
 
 
-void ff_perform_evca(AVFilterContext *ctx, AVFilterLink *inlink, AVFrame *in, FilterLink *inl,
-                        VCAContext *v, int plane_i);
+static const VCAAlgoVTable evca_vtable = {
+    .init_algo = ff_init_evca,
+    .perform_algo = ff_perform_evca,
+    .uninit_algo = ff_uninit_evca,
+};
 
 #endif
