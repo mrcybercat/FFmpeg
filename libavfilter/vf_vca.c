@@ -224,7 +224,7 @@ static int config_input(AVFilterLink *inlink)
     }
 
     if(v->algo != ALGO_STEREO_VCA)
-        v->print(ctx, AV_LOG_INFO, "POC,E,,h");
+        v->print(ctx, AV_LOG_INFO, "POC,E,h");
     else
         v->print(ctx, AV_LOG_INFO, "POC,E_l,h_l,E_r,h_r,s");
     if (v->enable_texture)

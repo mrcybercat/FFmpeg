@@ -87,7 +87,7 @@ typedef struct VCAContext {
 
     // video frame properties
     VCAPlaneInfo **plane;
-    // vca family algorithm relevant context (can also be thought of as intermediary results)
+    // vca family algorithm relevant context (can also be thought of as intermediary results store)
     VCAAlgoContext **algoctx;
 } VCAContext;
 
