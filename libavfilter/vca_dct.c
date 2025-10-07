@@ -371,22 +371,6 @@ void ff_vca_dct4_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 8;
 
     ALIGN_VAR_32(int16_t, coef[4 * 4]);
-    //ALIGN_VAR_32(int16_t, block[4 * 4]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(4*4*sizeof(int16_t));    
-    //block=av_malloc(4*4*sizeof(int16_t));    
-
-
-    //for (int i = 0; i < 4; i++)
-    //{
-    //    memcpy(&block[i * 4], &src[i * srcStride], 4 * sizeof(int16_t));
-    //}
-
-    //block = av_memdup(src, 4 * 4 * sizeof(int16_t));
-
-    //memcpy(block, src, 4 * 4 * sizeof(int16_t));
-
 
     partial_butterfly4(block, coef, shift_1st, 4);
     partial_butterfly4(coef, dst, shift_2nd, 4);
@@ -398,20 +382,6 @@ void ff_vca_dct8_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 9;
 
     ALIGN_VAR_32(int16_t, coef[8 * 8]);
-    //ALIGN_VAR_32(int16_t, block[8 * 8]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(8*8*sizeof(int16_t));    
-    //block=av_malloc(8*8*sizeof(int16_t));    
-    //memcpy(block, src, 8 * 8 * sizeof(int16_t));
-
-
-    //for (int i = 0; i < 8; i++)
-    //{
-    //    memcpy(&block[i * 8], &src[i * srcStride], 8 * sizeof(int16_t));
-    //}
-
-    //block = av_memdup(src, 8 * 8 * sizeof(int16_t));
 
     partial_butterfly8(block, coef, shift_1st, 8);
     partial_butterfly8(coef, dst, shift_2nd, 8);
@@ -423,14 +393,6 @@ void ff_vca_dct16_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 10;
 
     ALIGN_VAR_32(int16_t, coef[16 * 16]);
-    //ALIGN_VAR_32(int16_t, block[16 * 16]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(16*16*sizeof(int16_t));
-    //block=av_malloc(16*16*sizeof(int16_t));
-
-    //block = av_memdup(src, 16 * 16 * sizeof(int16_t));
-    //memcpy(block, src, 16 * 16 * sizeof(int16_t));
 
     partial_butterfly16(block, coef, shift_1st, 16);
     partial_butterfly16(coef, dst, shift_2nd, 16);
@@ -442,19 +404,6 @@ void ff_vca_dct32_c(const int16_t* block, int16_t* dst, int bit_depth)
     const int shift_2nd = 11;
 
     ALIGN_VAR_32(int16_t, coef[32 * 32]);
-    //ALIGN_VAR_32(int16_t, block[32 * 32]);
-    //int16_t* coef;
-    //int16_t* block;
-    //coef=av_malloc(32*32*sizeof(int16_t));    
-    //block=av_malloc(32*32*sizeof(int16_t));    
-
-    //for (int i = 0; i < 32; i++)
-    //{
-    //    memcpy(&block[i * 32], &src[i * srcStride], 32 * sizeof(int16_t));
-    //}
-
-    //memcpy(block, src, 32 * 32 * sizeof(int16_t));
-    //block = av_memdup(src, 32 * 32 * sizeof(int16_t));
 
     partial_butterfly32(block, coef, shift_1st, 32);
     partial_butterfly32(coef, dst, shift_2nd, 32);
@@ -464,14 +413,9 @@ void ff_vca_lowpass_dct8_c(const int16_t* src, int16_t* dst, int bit_depth)
 {
     ALIGN_VAR_32(int16_t, coef[4 * 4]);
     ALIGN_VAR_32(int16_t, avg_block[4 * 4]);
-    //int16_t* coef;
-    //int16_t* avg_block;
-    //coef=av_malloc(4*4*sizeof(int16_t));    
-    //avg_block=av_malloc(4*4*sizeof(int16_t));    
     
     int16_t totalSum = 0;
     int16_t sum = 0;
-    
     for (int i = 0; i < 4; i++)
         for (int j =0; j < 4; j++)
         {
@@ -483,20 +427,13 @@ void ff_vca_lowpass_dct8_c(const int16_t* src, int16_t* dst, int bit_depth)
             totalSum += sum; // use to calculate total block average
         }
 
-    //dct4
     ff_vca_dct4_c(avg_block, coef, bit_depth);
-    //(*s_dct4x4)(avg_block, coef, 4);
-
-    //dst = av_memdup(src, 32 * 32 * sizeof(int16_t));
 
     memset(dst, 0, 64 * sizeof(int16_t));
     for (int i = 0; i < 4; i++)
     {
-        //int16_t* tmp = &dst[i * 8]; 
-        //tmp = av_memdup(&coef[i * 4], 4 * sizeof(int16_t));
         memcpy(&dst[i * 8], &coef[i * 4], 4 * sizeof(int16_t));
     }
-    
 
     // replace first coef with total block average
     dst[0] = totalSum << 1;
@@ -506,11 +443,6 @@ void ff_vca_lowpass_dct16_c(const int16_t* src, int16_t* dst, int bit_depth)
 {
     ALIGN_VAR_32(int16_t, coef[8 * 8]);
     ALIGN_VAR_32(int16_t, avg_block[8 * 8]);
-    //int16_t* coef;
-    //int16_t* avg_block;
-    //coef=av_malloc(8*8*sizeof(int16_t));    
-    //avg_block=av_malloc(8*8*sizeof(int16_t));   
-
 
     int32_t totalSum = 0;
     int16_t sum = 0;
@@ -524,16 +456,11 @@ void ff_vca_lowpass_dct16_c(const int16_t* src, int16_t* dst, int bit_depth)
             totalSum += sum;
         }
 
-    //(*s_dct8x8)(avg_block, coef, 8);
-
     ff_vca_dct8_c(avg_block, coef, bit_depth);
-
 
     memset(dst, 0, 256 * sizeof(int16_t));
     for (int i = 0; i < 8; i++)
     {
-        //int16_t* tmp = &dst[i * 16]; 
-        //tmp = av_memdup(&coef[i * 8], 8 * sizeof(int16_t));
         memcpy(&dst[i * 16], &coef[i * 8], 8 * sizeof(int16_t));
     }
     dst[0] = (int16_t)(totalSum >> 1);
@@ -543,10 +470,6 @@ void ff_vca_lowpass_dct32_c(const int16_t* src, int16_t* dst, int bit_depth)
 {
     ALIGN_VAR_32(int16_t, coef[16 * 16]);
     ALIGN_VAR_32(int16_t, avg_block[16 * 16]);
-    //int16_t* coef;
-    //int16_t* avg_block;
-    //coef=av_malloc(16*16*sizeof(int16_t));    
-    //avg_block=av_malloc(16*16*sizeof(int16_t));   
    
     int32_t totalSum = 0;
     int16_t sum = 0;
@@ -562,13 +485,9 @@ void ff_vca_lowpass_dct32_c(const int16_t* src, int16_t* dst, int bit_depth)
 
     ff_vca_dct16_c(avg_block, coef, bit_depth);
  
-    //(*s_dct16x16)(avg_block, coef, 16);
-
     memset(dst, 0, 1024 * sizeof(int16_t));
     for (int i = 0; i < 16; i++)
     {
-        //int16_t* tmp = &dst[i * 32]; 
-        //tmp = av_memdup(&coef[i * 16], 16 * sizeof(int16_t));
         memcpy(&dst[i * 32], &coef[i * 16], 16 * sizeof(int16_t));
     }
     dst[0] = (int16_t)(totalSum >> 3);
@@ -595,9 +514,6 @@ uint32_t calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int enab
 
     for (unsigned i = 0; i < blocksize * blocksize; i++)
     {
-        //int16_t val = coeffBuffer[i];
-        //uint32_t absVal = (val < 0) ? -(int32_t)val : (int32_t)val;
-        //uint32_t weightedCoeff = (uint32_t)((weightFactorMatrix[i] * absVal) >> 8);
         uint32_t weighted_coeff = (uint32_t)((weights_matrix[i] * safe_abs(coeff_buffer[i])) >> 8);
         weighted_sum += weighted_coeff;
     }
