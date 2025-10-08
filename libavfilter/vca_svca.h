@@ -40,8 +40,8 @@ void ff_uninit_svca(VCAAlgoContext *ctx);
 typedef struct SVCAAlgoContext {
     VCAAlgoContext base;
     AVStereo3D *stereo;
+    uint32_t *energy;
     double *energy_dif;
-    uint32_t **energy_stereo;
     uint32_t **energy_prev_stereo;
 } SVCAAlgoContext;
 
