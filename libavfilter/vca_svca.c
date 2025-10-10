@@ -217,6 +217,7 @@ static int reinit_algoctx_over_stereo(SVCAAlgoContext *result, VCAPlaneInfo *pla
     if (!result->energy || !result->energy_dif
         || !result->energy_prev_stereo[LEFT] || !result->energy_prev_stereo[RIGHT])
         return AVERROR(ENOMEM);
+    return 0;
 }
 
 static double calc_energy_diff(VCAPlaneInfo *plane, SVCAAlgoContext *result, int view)
@@ -254,7 +255,10 @@ static void dispatch_svca(void* calc_energy_left, void* calc_energy_right, AVFil
     for (int i = 0; i < nb_threads; i++)
         frameTexture += th.partial_sums[i];
     *E_l = (uint32_t)((double)frameTexture /(plane->n_blocks * E_norm_factor));
-            
+    
+    // 
+    th.partial_sums = av_calloc(nb_threads, sizeof(uint32_t)),
+
     ff_filter_execute(ctx, calc_energy_right, &th, NULL, FFMIN(plane->h_blocks, nb_threads));
     *h_r = is_first_frame ? 0 : calc_energy_diff(plane, result, RIGHT);
     memcpy(result->energy_prev_stereo[RIGHT], result->energy, plane->n_blocks * sizeof(uint32_t));
@@ -323,7 +327,11 @@ void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl,
         if(sd){
             const AVStereo3D *stereo = (const AVStereo3D *)sd->data;
             memcpy(svca->stereo, stereo, sizeof(svca->stereo));
-            reinit_algoctx_over_stereo(svca, plane, v->blocksize);
+            int ret = reinit_algoctx_over_stereo(svca, plane, v->blocksize);
+            if(ret != 0) {
+                av_log(ctx, AV_LOG_ERROR, "Problem with detected stereo file metadata\n");
+                return;
+            }
         }
         else {
             av_log(ctx, AV_LOG_ERROR, "No Stereo data detected in a file\n");
