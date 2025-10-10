@@ -88,33 +88,33 @@ static uint32_t calc_energy_##BLOCKSIZE##_##PACKING##_slice(int stride, uint8_t 
     copy_vals_buffer_columns()
 
 #define DEFINE_CALC_ENERGY_FILTER_SLICE_PACKING(PACKING, VIEW)                      \
-static int calc_energy_filter_##PACKING##_##VIEW##_slice(AVFilterContext *ctx, void *arg, int job, int nb_jobs) {\
-    ThreadDataSVCA *th = arg;                                                       \
-    int block_row_start = (th->plane->h_blocks * job)     / nb_jobs;                \
-    int block_row_end   = (th->plane->h_blocks * (job+1)) / nb_jobs;                \
-    int slice_start = block_row_start * th->blocksize;                              \
-    int slice_end   = block_row_end   * th->blocksize;                              \
-    switch (th->blocksize) {                                                        \
-        case 32:                                                                    \
-            calc_energy_32_##PACKING##_##VIEW##_slice(                              \
-                th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass,    \
-                slice_start, slice_end, &th->partial_sums[job], th->perform_dct);   \
-            break;                                                                  \
-        case 16:                                                                    \
-            calc_energy_16_##PACKING##_##VIEW##_slice(                              \
-                th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass,    \
-                slice_start, slice_end, &th->partial_sums[job], th->perform_dct);   \
-            break;                                                                  \
-        case 8:                                                                     \
-            calc_energy_8_##PACKING##_##VIEW##_slice(                               \
-                th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass,    \
-                slice_start, slice_end, &th->partial_sums[job], th->perform_dct);   \
-            break;                                                                  \
-        default:                                                                    \
-            return AVERROR(AVERROR_INVALIDDATA);                                    \
-    }                                                                               \
-    return 0;                                                                       \
-}
+    static int calc_energy_filter_##PACKING##_##VIEW##_slice(AVFilterContext *ctx, void *arg, int job, int nb_jobs) {\
+        ThreadDataSVCA *th = arg;                                                       \
+        int block_row_start = (th->plane->h_blocks * job)     / nb_jobs;                \
+        int block_row_end   = (th->plane->h_blocks * (job+1)) / nb_jobs;                \
+        int slice_start = block_row_start * th->blocksize;                              \
+        int slice_end   = block_row_end   * th->blocksize;                              \
+        switch (th->blocksize) {                                                        \
+            case 32:                                                                    \
+                calc_energy_32_##PACKING##_##VIEW##_slice(                              \
+                    th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass,    \
+                    slice_start, slice_end, &th->partial_sums[job], th->perform_dct);   \
+                break;                                                                  \
+            case 16:                                                                    \
+                calc_energy_16_##PACKING##_##VIEW##_slice(                              \
+                    th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass,    \
+                    slice_start, slice_end, &th->partial_sums[job], th->perform_dct);   \
+                break;                                                                  \
+            case 8:                                                                     \
+                calc_energy_8_##PACKING##_##VIEW##_slice(                               \
+                    th->stride, th->src, th->plane, th->algoctx, th->enable_lowpass,    \
+                    slice_start, slice_end, &th->partial_sums[job], th->perform_dct);   \
+                break;                                                                  \
+            default:                                                                    \
+                return AVERROR(AVERROR_INVALIDDATA);                                    \
+        }                                                                               \
+        return 0;                                                                       \
+    }
 
 #define DEFINE_CALC_ENERGY_FILTER_SLICE(PACKING)            \
     DEFINE_CALC_ENERGY_FILTER_SLICE_PACKING(PACKING, left)  \
@@ -130,9 +130,12 @@ DEFINE_CALC_ENERGY_SLICE(tb_left, UNPACK_PLAIN);
 DEFINE_CALC_ENERGY_SLICE(tb_right, UNPACK_TB_BOTTOM_OFFSET);
 DEFINE_CALC_ENERGY_FILTER_SLICE(tb);
 
-/*
-DEFINE_CALC_ENERGY_SLICE(fs, UNPACK_PLAIN);
+// fs energy calc marco call
+DEFINE_CALC_ENERGY_SLICE(fs_either, UNPACK_PLAIN);
+DEFINE_CALC_ENERGY_FILTER_SLICE_PACKING(fs, either)
 
+
+/*
 // ch energy calc marco call
 DEFINE_CALC_ENERGY_SLICE(ch_left, UNPACK_CH_LEFT_OFFSET);
 DEFINE_CALC_ENERGY_SLICE(ch_right, UNPACK_CH_RIGHT_OFFSET);
@@ -255,10 +258,8 @@ static void dispatch_svca(void* calc_energy_left, void* calc_energy_right, AVFil
     for (int i = 0; i < nb_threads; i++)
         frameTexture += th.partial_sums[i];
     *E_l = (uint32_t)((double)frameTexture /(plane->n_blocks * E_norm_factor));
-    
-    // 
-    th.partial_sums = av_calloc(nb_threads, sizeof(uint32_t)),
 
+    frameTexture = 0;
     ff_filter_execute(ctx, calc_energy_right, &th, NULL, FFMIN(plane->h_blocks, nb_threads));
     *h_r = is_first_frame ? 0 : calc_energy_diff(plane, result, RIGHT);
     memcpy(result->energy_prev_stereo[RIGHT], result->energy, plane->n_blocks * sizeof(uint32_t));
@@ -312,52 +313,15 @@ void ff_uninit_svca(VCAAlgoContext *ctx) {
     av_freep(&svca->stereo);
 }
 
-void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl,
-                     VCAContext *v, int plane_i)
-{
+static void perform_svca_flats (AVFilterContext *ctx, ThreadDataSVCA th, SVCAAlgoContext *svca, 
+                VCAContext *v, VCAPlaneInfo *plane, int is_first_frame, int nb_threads, int frame_n) {
     uint32_t E_l, E_r = 0;
     double h_l, h_r, s = 0;
-    SVCAAlgoContext *svca = (SVCAAlgoContext *)v->algoctx[plane_i];
-    VCAPlaneInfo *plane = v->plane[plane_i];
-
-    int is_first_frame = v->n_frames_processed == 0 ? 1 : 0;
-
-    if(v->n_frames_processed == 0){
-        AVFrameSideData* sd = av_frame_get_side_data(in, AV_FRAME_DATA_STEREO3D);
-        if(sd){
-            const AVStereo3D *stereo = (const AVStereo3D *)sd->data;
-            memcpy(svca->stereo, stereo, sizeof(svca->stereo));
-            int ret = reinit_algoctx_over_stereo(svca, plane, v->blocksize);
-            if(ret != 0) {
-                av_log(ctx, AV_LOG_ERROR, "Problem with detected stereo file metadata\n");
-                return;
-            }
-        }
-        else {
-            av_log(ctx, AV_LOG_ERROR, "No Stereo data detected in a file\n");
-            return;
-        }
-            
-    }
-
-    //int stride = plane->w_pxls_src / plane->pxl_depth;
-
-    int nb_threads = ff_filter_get_nb_threads(ctx);
-    ThreadDataSVCA th = {
-        .stride = in->linesize[plane_i],
-        .blocksize = v->blocksize,
-        .enable_lowpass = v->enable_lowpass,
-        .src = in->data[plane_i],
-        .plane =  plane,
-        .algoctx = svca,
-        .partial_sums = av_calloc(nb_threads, sizeof(uint32_t)),
-        .perform_dct = v->perform_dct
-    };
 
     switch(svca->stereo->type) {
         case AV_STEREO3D_2D:
-            //av_log(ctx, AV_LOG_ERROR, "Video is not stereoscopic.\n");
-            return -1;
+            av_log(ctx, AV_LOG_ERROR, "Video is not stereoscopic.\n");
+            return;
         case AV_STEREO3D_SIDEBYSIDE:
             dispatch_svca(calc_energy_filter_sbs_left_slice, calc_energy_filter_sbs_right_slice, 
                     ctx, th, nb_threads, plane, is_first_frame, svca, &E_l, &h_l, &E_r, &h_r, &s);
@@ -386,12 +350,6 @@ void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl,
             break;
 */
             
-        case AV_STEREO3D_UNSPEC:
-            av_log(ctx, AV_LOG_ERROR, "Unspecified packing.\n");
-            return -1;
-        default:
-            av_log(ctx, AV_LOG_ERROR, "Unrecognized or unsuported packing.\n");
-            return -1;
     }
 
     av_free(th.partial_sums);    
@@ -399,12 +357,127 @@ void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl,
     // Dump info;
     v->print(ctx, AV_LOG_INFO,
         "%4"PRId64,
-        inl->frame_count_out);
+        frame_n);
     v->print(ctx, AV_LOG_INFO,
             ",%d,%f,%d,%f,%f",
             E_l, h_l, E_r, h_r, s);
 
     v->print(ctx, AV_LOG_INFO, "\n");
+}
+
+static void perform_svca_sequential (AVFilterContext *ctx, ThreadDataSVCA th, SVCAAlgoContext *svca, 
+                VCAContext *v, VCAPlaneInfo *plane, int nb_threads, int frame_n) {
+    uint32_t E_l, E_r = 0;
+    double h_l, h_r, s = 0;
+    uint32_t frameTexture = 0;
+
+    if ( frame_n % 2 == 0 ) {
+        ff_filter_execute(ctx, calc_energy_filter_fs_either_slice, &th, NULL, FFMIN(plane->h_blocks, nb_threads));
+        h_l = frame_n == 0 ? 0 : calc_energy_diff(plane, svca, LEFT);
+        memcpy(svca->energy_prev_stereo[LEFT], svca->energy, plane->n_blocks * sizeof(uint32_t));
+        for (int i = 0; i < nb_threads; i++)
+            frameTexture += th.partial_sums[i];
+        E_l = (uint32_t)((double)frameTexture /(plane->n_blocks * E_norm_factor));
+        
+        // Dump info;
+        v->print(ctx, AV_LOG_INFO,
+            "%4"PRId64,
+            frame_n);
+        v->print(ctx, AV_LOG_INFO,
+                ",%d,%f,-,-,-",
+                E_l, h_l);
+
+        v->print(ctx, AV_LOG_INFO, "\n");
+    } 
+    else {
+        ff_filter_execute(ctx, calc_energy_filter_fs_either_slice, &th, NULL, FFMIN(plane->h_blocks, nb_threads));
+        h_r = frame_n == 1 ? 0 : calc_energy_diff(plane, svca, RIGHT);
+        memcpy(svca->energy_prev_stereo[RIGHT], svca->energy, plane->n_blocks * sizeof(uint32_t));
+        for (int i = 0; i < nb_threads; i++)
+            frameTexture += th.partial_sums[i];
+        E_r = (uint32_t)((double)frameTexture /(plane->n_blocks * E_norm_factor));
+
+        s = calc_lr_energy_diff(plane, svca);
+
+        // Dump info;
+        v->print(ctx, AV_LOG_INFO,
+            "%4"PRId64,
+            frame_n);
+        v->print(ctx, AV_LOG_INFO,
+                ",-,-,%d,%f,%f",
+                E_r, h_r, s);
+
+        v->print(ctx, AV_LOG_INFO, "\n");
+    }
+}
+
+void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl,
+                     VCAContext *v, int plane_i)
+{
+    SVCAAlgoContext *svca = (SVCAAlgoContext *)v->algoctx[plane_i];
+    VCAPlaneInfo *plane = v->plane[plane_i];
+    int is_first_frame = v->n_frames_processed == 0 ? 1 : 0;
+
+    if(is_first_frame){
+        AVFrameSideData* sd = av_frame_get_side_data(in, AV_FRAME_DATA_STEREO3D);
+        if(sd) {
+            const AVStereo3D *stereo = (const AVStereo3D *)sd->data;
+            memcpy(svca->stereo, stereo, sizeof(svca->stereo));
+            int ret = reinit_algoctx_over_stereo(svca, plane, v->blocksize);
+            if(ret != 0) {
+                av_log(ctx, AV_LOG_ERROR, "Problem with detected stereo file metadata\n");
+                return;
+            }
+        }
+        else {
+            av_log(ctx, AV_LOG_ERROR, "No Stereo data detected in a file\n");
+            return;
+        }
+    }
+
+    int nb_threads = ff_filter_get_nb_threads(ctx);
+    ThreadDataSVCA th = {
+        .stride = in->linesize[plane_i],
+        .src = in->data[plane_i],
+        .blocksize = v->blocksize,
+        .enable_lowpass = v->enable_lowpass,
+        .plane =  plane,
+        .algoctx = svca,
+        .partial_sums = av_calloc(nb_threads, sizeof(uint32_t)),
+        .perform_dct = v->perform_dct
+    };
+
+    switch(svca->stereo->type) { 
+        case AV_STEREO3D_SIDEBYSIDE:
+        case AV_STEREO3D_TOPBOTTOM:
+        //case AV_STEREO3D_CHECKERBOARD:
+        //case AV_STEREO3D_SIDEBYSIDE_QUINCUNX:
+        //case AV_STEREO3D_LINES:
+        //case AV_STEREO3D_COLUMNS:
+            perform_svca_flats(ctx, th, svca, v, plane, is_first_frame, nb_threads, inl->frame_count_out);
+            break;
+        case AV_STEREO3D_FRAMESEQUENCE:
+            perform_svca_sequential(ctx, th, svca, v, plane, nb_threads, inl->frame_count_out);
+            break;
+        case AV_STEREO3D_2D:
+            av_log(ctx, AV_LOG_ERROR, "Video is not stereoscopic.\n");
+            return;
+        case AV_STEREO3D_UNSPEC:
+            av_log(ctx, AV_LOG_ERROR, "Unspecified packing.\n");
+            return;
+        default:
+            av_log(ctx, AV_LOG_ERROR, "Unrecognized or unsuported packing.\n");
+            return;
+    }
+}
+/*
+
+            break;
+    }
+
+
+
+    
 }
 
 
