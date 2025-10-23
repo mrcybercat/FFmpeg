@@ -41,6 +41,7 @@
 #include "vca_ovca.h"
 #include "vca_evca.h"
 #include "vca_svca.h"
+#include "vca_esvca.h"
 
 #define OFFSET(x) offsetof(VCAContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
@@ -69,6 +70,8 @@ static const AVOption vca_options[] = {
         { .i64 = ALGO_STEREO_VCA }, INT_MIN, INT_MAX, .flags = FLAGS, .unit = "algo" },
     { "ivca", "Inter-relation-aware VCA is used (slightly less perfomance, better corelation)", 0, AV_OPT_TYPE_CONST,
         { .i64 = ALGO_INTER_VCA }, INT_MIN, INT_MAX, .flags = FLAGS, .unit = "algo" },
+    { "esvca", "Stereoscopic VCA utilizing enhanced folmulation", 0, AV_OPT_TYPE_CONST,
+        { .i64 = ALGO_ENH_STEREO_VCA }, INT_MIN, INT_MAX, .flags = FLAGS, .unit = "algo" },
     { NULL }
 };
 
@@ -108,7 +111,7 @@ static void print_file(AVFilterContext *ctx, int lvl, const char *msg, ...)
 static VCAAlgoContext *algo_create_ovca(int n_blocks) {
     OVCAAlgoContext *ovca = av_mallocz(sizeof(*ovca));
     ovca->base.vtable = &ovca_vtable;
-    ovca->base.vtable->init_algo((VCAAlgoContext *)ovca, n_blocks, NULL);
+    ovca->base.vtable->init_algo((VCAAlgoContext *)ovca, n_blocks, 0);
     return (VCAAlgoContext *)ovca;
 }
 
@@ -119,10 +122,17 @@ static VCAAlgoContext *algo_create_evca(int n_blocks, int blocksize) {
     return (VCAAlgoContext *)evca;
 }
 
+static VCAAlgoContext *algo_create_esvca(int n_blocks, int blocksize) {
+    ESVCAAlgoContext *esvca = av_mallocz(sizeof(*esvca));
+    esvca->base.vtable = &esvca_vtable;
+    esvca->base.vtable->init_algo((VCAAlgoContext *)esvca, n_blocks, blocksize);
+    return (VCAAlgoContext *)esvca;
+}
+
 static VCAAlgoContext *algo_create_svca(int n_blocks) {
     SVCAAlgoContext *svca = av_mallocz(sizeof(*svca));
     svca->base.vtable = &svca_vtable;
-    svca->base.vtable->init_algo((VCAAlgoContext *)svca, n_blocks, NULL);
+    svca->base.vtable->init_algo((VCAAlgoContext *)svca, n_blocks, 0);
     return (VCAAlgoContext *)svca;
 }
 
@@ -220,10 +230,13 @@ static int config_input(AVFilterLink *inlink)
             case ALGO_INTER_VCA:
                 v->algoctx[i] = algo_create_ovca(v->plane[i]->n_blocks);
                 break;
+            case ALGO_ENH_STEREO_VCA:
+                v->algoctx[i] = algo_create_esvca(v->plane[i]->n_blocks, v->blocksize);
+                break;       
         }
     }
 
-    if(v->algo != ALGO_STEREO_VCA)
+    if(v->algo != ALGO_STEREO_VCA || v->algo != ALGO_ENH_STEREO_VCA)
         v->print(ctx, AV_LOG_INFO, "POC,E,h");
     else
         v->print(ctx, AV_LOG_INFO, "POC,E_l,h_l,E_r,h_r,s");

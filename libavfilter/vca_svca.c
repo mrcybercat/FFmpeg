@@ -206,7 +206,7 @@ static int reinit_algoctx_over_stereo(SVCAAlgoContext *result, VCAPlaneInfo *pla
         av_freep(&result->energy_prev_stereo);
     }
      
-    result->energy = av_malloc(plane->n_blocks * sizeof(double)); 
+    result->energy = av_malloc(plane->n_blocks * sizeof(uint32_t)); 
     result->energy_dif = av_malloc(plane->n_blocks * sizeof(double)); 
 
     result->energy_prev_stereo = av_malloc(2 * sizeof(*result->energy_prev_stereo));
@@ -291,7 +291,7 @@ void ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
     }
 
     svca->energy_dif = av_malloc(n_blocks * sizeof(double)); 
-    svca->energy = av_malloc(n_blocks * sizeof(double)); 
+    svca->energy = av_malloc(n_blocks * sizeof(uint32_t)); 
 
     if (!svca->energy_prev_stereo || !svca->energy_prev_stereo[LEFT] || !svca->energy_prev_stereo[RIGHT])
         return AVERROR(ENOMEM);

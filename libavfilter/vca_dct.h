@@ -43,6 +43,7 @@ enum VCAAlgorithmType {
     ALGO_ENHANCED_VCA,   // 
     ALGO_STEREO_VCA,     //
     ALGO_INTER_VCA,      //
+    ALGO_ENH_STEREO_VCA,
 };
 
 typedef struct VCAPlaneInfo {
