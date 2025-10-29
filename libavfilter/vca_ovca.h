@@ -30,9 +30,9 @@
 #ifndef AVFILTER_VCA_H
 #define AVFILTER_VCA_H
 
-void ff_init_ovca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+av_cold int ff_init_ovca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
 void ff_perform_ovca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-void ff_uninit_ovca(VCAAlgoContext *ctx);
+av_cold void ff_uninit_ovca(VCAAlgoContext *ctx);
 
 typedef struct OVCAAlgoContext {
     VCAAlgoContext base;

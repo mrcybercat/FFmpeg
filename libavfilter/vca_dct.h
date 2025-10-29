@@ -93,9 +93,9 @@ typedef struct VCAContext {
 } VCAContext;
 
 typedef struct VCAAlgoVTable {
-    void (*init_algo)(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+    av_cold int (*init_algo)(VCAAlgoContext *ctx, int n_blocks, int blocksize);
     void (*perform_algo)(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-    void (*uninit_algo)(VCAAlgoContext *ctx);
+    av_cold void (*uninit_algo)(VCAAlgoContext *ctx);
 } VCAAlgoVTable;
 
 

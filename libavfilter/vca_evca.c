@@ -181,7 +181,7 @@ static int calc_evca_filter_slice(AVFilterContext *ctx, void *arg, int job, int 
     return 0;
 }
 
-void ff_init_evca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
+av_cold int ff_init_evca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
     EVCAAlgoContext *evca = (EVCAAlgoContext *)ctx;
 
     av_freep(&evca->energy);
@@ -198,9 +198,10 @@ void ff_init_evca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
 
     if (!evca->energy_weight_pxl || !evca->energy_weight_pxl_prev || !evca->energy || !evca->energy_dif)
         return AVERROR(ENOMEM);
+    return 0;
 }
 
-void ff_uninit_evca(VCAAlgoContext *ctx) {
+av_cold void ff_uninit_evca(VCAAlgoContext *ctx) {
     EVCAAlgoContext *evca = (EVCAAlgoContext *)ctx;
 
     av_freep(&evca->energy);

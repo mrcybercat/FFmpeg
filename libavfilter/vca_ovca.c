@@ -21,6 +21,8 @@
 #include "vca_ovca.h"
 
 
+
+
 static uint32_t calc_energy_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, 
                                     int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
                                     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
@@ -198,7 +200,7 @@ static double calc_energy_diff(VCAPlaneInfo *plane, OVCAAlgoContext *result)
 }
 
 
-void ff_init_ovca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
+av_cold int ff_init_ovca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
     OVCAAlgoContext *ovca = (OVCAAlgoContext *)ctx;
 
     // Free previous buffers in case they are allocated already
@@ -211,9 +213,10 @@ void ff_init_ovca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
     ovca->energy_dif = av_malloc(n_blocks * sizeof(double)); 
     if (!ovca->energy || ! ovca->energy_prev || !ovca->energy_dif)
         return AVERROR(ENOMEM);
+    return 0;
 }
 
-void ff_uninit_ovca(VCAAlgoContext *ctx) {
+av_cold void ff_uninit_ovca(VCAAlgoContext *ctx) {
     OVCAAlgoContext *ovca = (OVCAAlgoContext *)ctx;
 
     av_freep(&ovca->energy_prev);
@@ -256,18 +259,18 @@ void ff_perform_ovca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCACont
 #define DEFINE_CALC_ENERGY(block_sz)                                                                        \
 static uint32_t calc_energy_##block_sz##_slice(int stride, uint8_t *src, VCAPlaneInfo *plane,               \
                                                VCAResults *result, int enable_lowpass,                      \
-                                               int slice_start, int slice_end, uint32_t *partial_sum,       \   
+                                               int slice_start, int slice_end, uint32_t *partial_sum,       \
                                     void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) \
 {                                                                                       \
     int block_i = (slice_start / 32) * plane->w_blocks;                                 \
-    uint32_t sliceTexture = 0;                                                          \         
+    uint32_t sliceTexture = 0;                                                          \
     ALIGN_VAR_32(int16_t, block_buffer[32 * 32]);                                       \
     ALIGN_VAR_32(int16_t, out_buffer[32 * 32]);                                         \
     const unsigned bit_depth = plane->bit_depth;                                        \
     if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)                           \
         return AVERROR(AVERROR_INVALIDDATA);                                            \
-    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 32) {             \ 
-        int padding_b = FFMAX(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);      \              
+    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 32) {             \
+        int padding_b = FFMAX(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);      \
         for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 32){                \
             int offset = blockX * plane->pxl_depth + (blockY * stride);                 \
             int padding_r = FFMAX((int)(blockX + 32) - (int)(plane->w_pxls_src), 0);    \
@@ -275,7 +278,7 @@ static uint32_t calc_energy_##block_sz##_slice(int stride, uint8_t *src, VCAPlan
                             block_buffer, padding_r, padding_b);                        \
             perform_dct(block_buffer, out_buffer, bit_depth);                           \
             result->energy[block_i] =                                                   \
-                calc_weighted_coeff(32, out_buffer, enable_lowpass);                    \            
+                calc_weighted_coeff(32, out_buffer, enable_lowpass);                    \
             sliceTexture += result->energy[block_i];                                    \
             block_i++;                                                                  \
         }                                                                               \

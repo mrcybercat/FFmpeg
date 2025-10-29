@@ -33,9 +33,9 @@
 #define AVFILTER_SVCA_H
 
 
-void ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+av_cold int ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
 void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-void ff_uninit_svca(VCAAlgoContext *ctx);
+av_cold void ff_uninit_svca(VCAAlgoContext *ctx);
 
 typedef struct SVCAAlgoContext {
     VCAAlgoContext base;
@@ -66,7 +66,5 @@ static const VCAAlgoVTable svca_vtable = {
     .perform_algo = ff_perform_svca,
     .uninit_algo = ff_uninit_svca,
 };
-
-
 
 #endif

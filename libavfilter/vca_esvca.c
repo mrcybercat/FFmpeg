@@ -304,7 +304,7 @@ static void dispatch_esvca(void* calc_energy_left, void* calc_energy_right, AVFi
 
 }
 
-void ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
+av_cold int ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
     ESVCAAlgoContext *esvca = (ESVCAAlgoContext *)ctx;
     esvca->stereo = av_mallocz(sizeof(AVStereo3D));
 
@@ -334,6 +334,7 @@ void ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
         return AVERROR(ENOMEM);
     if (!esvca->energy_dif || !esvca->energy)
         return AVERROR(ENOMEM);
+    return 0;
 }
 
 void ff_uninit_esvca(VCAAlgoContext *ctx) {

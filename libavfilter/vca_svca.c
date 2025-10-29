@@ -155,7 +155,7 @@ DEFINE_CALC_ENERGY_FILTER_SLICE(columns);
 // fs energy calc marco call
 
 
-static int reinit_algoctx_over_stereo(SVCAAlgoContext *result, VCAPlaneInfo *plane, int blocksize){
+av_cold static int reinit_algoctx_over_stereo(SVCAAlgoContext *result, VCAPlaneInfo *plane, int blocksize){
     //iidnt wth = plane->w_pxls_src;
     //int height = plane->h_pxls_src;
 
@@ -270,7 +270,7 @@ static void dispatch_svca(void* calc_energy_left, void* calc_energy_right, AVFil
     *s = calc_lr_energy_diff(plane, result);
 }
 
-void ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
+av_cold int ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
     SVCAAlgoContext *svca = (SVCAAlgoContext *)ctx;
     svca->stereo = av_mallocz(sizeof(AVStereo3D));
 
@@ -297,9 +297,10 @@ void ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
         return AVERROR(ENOMEM);
     if (!svca->energy_dif || !svca->energy)
         return AVERROR(ENOMEM);
+    return 0;
 }
 
-void ff_uninit_svca(VCAAlgoContext *ctx) {
+av_cold void ff_uninit_svca(VCAAlgoContext *ctx) {
     SVCAAlgoContext *svca = (SVCAAlgoContext *)ctx;
 
     av_freep(&svca->energy);    

@@ -108,34 +108,54 @@ static void print_file(AVFilterContext *ctx, int lvl, const char *msg, ...)
     va_end(argument_list);
 }
 
-static VCAAlgoContext *algo_create_ovca(int n_blocks) {
+static av_cold int algo_create_ovca(VCAContext* ctx, int i) {
     OVCAAlgoContext *ovca = av_mallocz(sizeof(*ovca));
     ovca->base.vtable = &ovca_vtable;
-    ovca->base.vtable->init_algo((VCAAlgoContext *)ovca, n_blocks, 0);
-    return (VCAAlgoContext *)ovca;
+    int ret = ovca->base.vtable->init_algo((VCAAlgoContext *)ovca, ctx->plane[i]->n_blocks, 0);
+    ctx->algoctx[i] = (VCAAlgoContext *)ovca;
+    return ret;
 }
 
-static VCAAlgoContext *algo_create_evca(int n_blocks, int blocksize) {
+static av_cold int algo_create_evca(VCAContext* ctx, int i) {
     EVCAAlgoContext *evca = av_mallocz(sizeof(*evca));
     evca->base.vtable = &evca_vtable;
-    evca->base.vtable->init_algo((VCAAlgoContext *)evca, n_blocks, blocksize);
-    return (VCAAlgoContext *)evca;
+    int ret = evca->base.vtable->init_algo((VCAAlgoContext *)evca, ctx->plane[i]->n_blocks, ctx->blocksize);
+    ctx->algoctx[i] = (VCAAlgoContext *)evca;
+    return ret;
 }
 
-static VCAAlgoContext *algo_create_esvca(int n_blocks, int blocksize) {
+static av_cold int algo_create_esvca(VCAContext* ctx, int i) {
     ESVCAAlgoContext *esvca = av_mallocz(sizeof(*esvca));
     esvca->base.vtable = &esvca_vtable;
-    esvca->base.vtable->init_algo((VCAAlgoContext *)esvca, n_blocks, blocksize);
-    return (VCAAlgoContext *)esvca;
+    int ret = esvca->base.vtable->init_algo((VCAAlgoContext *)esvca, ctx->plane[i]->n_blocks, ctx->blocksize);
+    ctx->algoctx[i] = (VCAAlgoContext *)esvca;
+    return ret;
 }
 
-static VCAAlgoContext *algo_create_svca(int n_blocks) {
+static av_cold int algo_create_svca(VCAContext* ctx, int i) {
     SVCAAlgoContext *svca = av_mallocz(sizeof(*svca));
     svca->base.vtable = &svca_vtable;
-    svca->base.vtable->init_algo((VCAAlgoContext *)svca, n_blocks, 0);
-    return (VCAAlgoContext *)svca;
+    int ret = svca->base.vtable->init_algo((VCAAlgoContext *)svca, ctx->plane[i]->n_blocks, 0);
+    ctx->algoctx[i] = (VCAAlgoContext *)svca;
+    return ret;
 }
 
+static av_cold int create_algo(VCAContext* ctx, int plane_i){
+    switch (ctx->algo) {
+        case ALGO_STANDARD_VCA:
+            return algo_create_ovca(ctx, plane_i);
+        case ALGO_ENHANCED_VCA:
+            return algo_create_evca(ctx, plane_i);
+        case ALGO_STEREO_VCA:
+            return algo_create_svca(ctx, plane_i);
+        case ALGO_INTER_VCA:
+            return algo_create_ovca(ctx, plane_i);
+        case ALGO_ENH_STEREO_VCA:
+            return algo_create_esvca(ctx, plane_i);
+        default:
+            return AVERROR(AVERROR_INVALIDDATA);
+    } 
+}
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in)
 {
@@ -217,22 +237,10 @@ static int config_input(AVFilterLink *inlink)
     }
 
     for (int i = 0; i < planes; i++) {
-        switch (v->algo) {
-            case ALGO_STANDARD_VCA:
-                v->algoctx[i] = algo_create_ovca(v->plane[i]->n_blocks);
-                break;
-            case ALGO_ENHANCED_VCA:
-                v->algoctx[i] = algo_create_evca(v->plane[i]->n_blocks, v->blocksize);
-                break;
-            case ALGO_STEREO_VCA:
-                v->algoctx[i] = algo_create_svca(v->plane[i]->n_blocks);
-                break;
-            case ALGO_INTER_VCA:
-                v->algoctx[i] = algo_create_ovca(v->plane[i]->n_blocks);
-                break;
-            case ALGO_ENH_STEREO_VCA:
-                v->algoctx[i] = algo_create_esvca(v->plane[i]->n_blocks, v->blocksize);
-                break;       
+        int ret = create_algo(v, i);
+        if (ret != 0) {
+            av_log(ctx, AV_LOG_ERROR, "Unable to initialize VCA algorithm context");
+            return ret;
         }
     }
 

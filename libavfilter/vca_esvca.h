@@ -33,9 +33,9 @@
 #define AVFILTER_ESVCA_H
 
 
-void ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+av_cold int ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
 void ff_perform_esvca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-void ff_uninit_esvca(VCAAlgoContext *ctx);
+av_cold void ff_uninit_esvca(VCAAlgoContext *ctx);
 
 typedef struct ESVCAAlgoContext {
     VCAAlgoContext base;
