@@ -525,16 +525,13 @@ void ff_calc_weighted_coeff_w_diff(unsigned blocksize, int16_t *coeff_buffer, ui
     }
 
     for (unsigned i = 0; i < blocksize * blocksize; i++) {
-            uint32_t weighted_coeff = (uint32_t)((weights_matrix[i] * SAFE_ABS(coeff_buffer[i])) >> 8);
-            energy_weight[i + offset] = weighted_coeff;
-            weighted_sum += weighted_coeff;
-    }
+        uint32_t weighted_coeff = (weights_matrix[i] * SAFE_ABS(coeff_buffer[i])) >> 8;
+        uint32_t prev_weight = energy_weight_prev[i + offset];
+        energy_weight[i + offset] = weighted_coeff;
 
-    if(!is_first_frame) {
-        for (unsigned i = 0; i < blocksize * blocksize; i++) {
-                double weight_diff = abs((int)energy_weight[i + offset] - (int)energy_weight_prev[i + offset]);
-                diff_weight_sum += weight_diff;
-        }
+        weighted_sum += weighted_coeff;
+        if (!is_first_frame)
+            diff_weight_sum += abs((int)weighted_coeff - (int)prev_weight);
     }
 
     if (blocksize >= 16 && enable_lowpass)

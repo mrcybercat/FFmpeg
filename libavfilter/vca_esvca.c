@@ -260,7 +260,8 @@ static int calc_weightdiff_lr_slice(AVFilterContext *ctx, void *arg, int job, in
         diff_weight_sum += weight_diff_lr;                                                               
         }                                                                                   
     }                                     
-    th->partial_sums_s[job] = diff_weight_sum;                                               
+    th->partial_sums_s[job] = diff_weight_sum;  
+    return 0;                                             
 }
 
 
