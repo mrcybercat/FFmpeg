@@ -42,6 +42,7 @@
 #include "vca_evca.h"
 #include "vca_svca.h"
 #include "vca_esvca.h"
+#include "vca_ivca.h"
 
 #define OFFSET(x) offsetof(VCAContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
@@ -52,7 +53,6 @@ static const AVOption vca_options[] = {
     { "n", "Set the frames batch size", OFFSET(n_frames), AV_OPT_TYPE_INT, {.i64=500}, 2, INT_MAX, FLAGS },
     // Performance
     { "lowpass", "Enable low-pass DCT", OFFSET(enable_lowpass), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
-    { "texture", "Enable analysis of texture", OFFSET(enable_texture), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     { "chroma", "Enable analysis of chroma channels", OFFSET(enable_chroma), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     { "simd", "Enable hardware acceralation with SIMD", OFFSET(enable_simd), AV_OPT_TYPE_BOOL, { .i64=0 }, 0, 1, FLAGS },
     // Output
@@ -124,6 +124,14 @@ static av_cold int algo_create_evca(VCAContext* ctx, int i) {
     return ret;
 }
 
+static av_cold int algo_create_ivca(VCAContext* ctx, int i) {
+    IVCAAlgoContext *ivca = av_mallocz(sizeof(*ivca));
+    ivca->base.vtable = &ivca_vtable;
+    int ret = ivca->base.vtable->init_algo((VCAAlgoContext *)ivca, ctx->plane[i]->n_blocks, 0);
+    ctx->algoctx[i] = (VCAAlgoContext *)ivca;
+    return ret;
+}
+
 static av_cold int algo_create_esvca(VCAContext* ctx, int i) {
     ESVCAAlgoContext *esvca = av_mallocz(sizeof(*esvca));
     esvca->base.vtable = &esvca_vtable;
@@ -149,7 +157,7 @@ static av_cold int create_algo(VCAContext* ctx, int plane_i){
         case ALGO_STEREO_VCA:
             return algo_create_svca(ctx, plane_i);
         case ALGO_INTER_VCA:
-            return algo_create_ovca(ctx, plane_i);
+            return algo_create_ivca(ctx, plane_i);
         case ALGO_ENH_STEREO_VCA:
             return algo_create_esvca(ctx, plane_i);
         default:
@@ -244,21 +252,41 @@ static int config_input(AVFilterLink *inlink)
         }
     }
 
-    if(v->algo != ALGO_STEREO_VCA || v->algo != ALGO_ENH_STEREO_VCA)
-        v->print(ctx, AV_LOG_INFO, "POC,E,h");
-    else
-        v->print(ctx, AV_LOG_INFO, "POC,E_l,h_l,E_r,h_r,s");
-    if (v->enable_texture)
-        v->print(ctx, AV_LOG_INFO, ",L");
-    if (v->enable_chroma)
-        v->print(ctx, AV_LOG_INFO, ",EV,hV,EU,hE");
-    if (v->enable_chroma && v->enable_texture)
-        v->print(ctx, AV_LOG_INFO, ",avgV,avgU");
+    switch (v->algo) {
+        case ALGO_STANDARD_VCA:
+        case ALGO_ENHANCED_VCA:
+            v->print(ctx, AV_LOG_INFO, "POC,E,h");
+            break;
+        case ALGO_STEREO_VCA:
+        case ALGO_ENH_STEREO_VCA:
+            v->print(ctx, AV_LOG_INFO, "POC,E_l,h_l,E_r,h_r,s");
+            break;
+        case ALGO_INTER_VCA:
+            v->print(ctx, AV_LOG_INFO, "POC,E,h,pred");
+            break;
+        default:
+            break;
+    }
+    if(v->enable_chroma) {
+        switch (v->algo) {
+            case ALGO_STANDARD_VCA:
+            case ALGO_ENHANCED_VCA:
+                v->print(ctx, AV_LOG_INFO, ",EV,hV,EU,hE");
+                break;
+            case ALGO_STEREO_VCA:
+            case ALGO_ENH_STEREO_VCA:
+                v->print(ctx, AV_LOG_INFO, "E_lV,h_lV,E_rV,h_rV,sV,E_lU,h_lU,E_rU,h_rU,sU");
+                break;
+            case ALGO_INTER_VCA:
+                v->print(ctx, AV_LOG_INFO, "EV,hV,predV,EU,hE,predU");
+                break;
+            default:
+                break;
+        }
+    }
 
     v->print(ctx, AV_LOG_INFO, "\n");
-
     av_log(ctx, AV_LOG_INFO, "threads: %d\n", ff_filter_get_nb_threads(ctx));
-
     return 0;
 }
 

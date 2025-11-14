@@ -38,6 +38,9 @@
 #define ALIGN_VAR_32(T, var) __declspec(align(32)) T var
 #endif
 
+#define SAFE_ABS(n) _Generic((n), \
+    signed char: abs(n), short: abs(n), int: abs(n), long: labs(n), long long: llabs(n))
+
 enum VCAAlgorithmType {
     ALGO_STANDARD_VCA,   // 
     ALGO_ENHANCED_VCA,   // 
@@ -78,7 +81,6 @@ typedef struct VCAContext {
     unsigned blocksize;
     int enable_lowpass;
     int enable_chroma;
-    int enable_texture;
     int enable_simd;
     int yuview;
     int n_frames;

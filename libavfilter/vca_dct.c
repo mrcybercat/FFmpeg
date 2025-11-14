@@ -21,10 +21,6 @@
 
 #include "vca_dct.h"
 
-#define SAFE_ABS(n) _Generic((n), \
-    signed char: abs(n), short: abs(n), int: abs(n), long: labs(n), long long: llabs(n))
-
-
 static const int16_t weights_dct8[64] = {
     0,  27, 94,  94,  94,  94,  94,  95,  27, 94, 94,  95,  96,  97,  98,  99,
     94, 94, 95,  97,  99,  101, 104, 107, 94, 95, 97,  99,  103, 107, 113, 120,
