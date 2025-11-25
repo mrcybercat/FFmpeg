@@ -20,113 +20,36 @@
 #include "vca_dct.h"
 #include "vca_ovca.h"
 
-
-
-
-static uint32_t calc_energy_32_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, 
-                                    int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
-                                    void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
-{
-    int block_i = (slice_start / 32) * plane->w_blocks;
-    uint32_t sliceTexture = 0;
-
-    ALIGN_VAR_32(int16_t, block_buffer[32 * 32]);
-    ALIGN_VAR_32(int16_t, out_buffer[32 * 32]);
-
-    const unsigned bit_depth = plane->bit_depth;
-    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
-        return AVERROR(AVERROR_INVALIDDATA);
-
-    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 32) { 
-        int padding_b = FFMAX(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);
-        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 32){
-            int offset = blockX * plane->pxl_depth + (blockY * stride);
-            int padding_r = FFMAX((int)(blockX + 32) - (int)(plane->w_pxls_src), 0);
-
-            // Copy values to block buffer 
-            ff_copy_vals_buffer(plane->pxl_depth, offset, 32, src, stride, block_buffer, padding_r, padding_b);
-            perform_dct(block_buffer, out_buffer, bit_depth);
-            // Calculate energy and brightness
-            // result.brightnessPerBlock[blockIndex] = uint32_t(sqrt(coeffBuffer[0]));
-            result->energy[block_i] = ff_calc_weighted_coeff(32, out_buffer, enable_lowpass);
-            
-            sliceTexture += result->energy[block_i];
-            block_i++;
-        }
-    }
-    //av_freep(block_buffer);
-    //av_freep(out_buffer);
-    *partial_sum = sliceTexture;
-    return  sliceTexture;
+#define DEFINE_CALC_ENERGY_SLICE(BLOCKSIZE)                                                                             \
+static uint32_t calc_energy_##BLOCKSIZE##_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, \
+                                    int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,          \
+                                    void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) {           \
+    int block_i = (slice_start / BLOCKSIZE) * plane->w_blocks;                                                          \
+    uint32_t sliceTexture = 0;                                                                                          \
+    ALIGN_VAR_32(int16_t, block_buffer[BLOCKSIZE * BLOCKSIZE]);                                                         \
+    ALIGN_VAR_32(int16_t, out_buffer[BLOCKSIZE * BLOCKSIZE]);                                                           \
+    const unsigned bit_depth = plane->bit_depth;                                                                        \
+    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)                                                           \
+        return AVERROR(AVERROR_INVALIDDATA);                                                                            \
+    for (unsigned blockY = slice_start; blockY < slice_end; blockY += BLOCKSIZE) {                                      \
+        int padding_b = FFMAX(((int)(blockY + BLOCKSIZE) - (int)(plane->h_pxls_src)), 0);                               \
+        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += BLOCKSIZE){                                         \
+            int offset = blockX * plane->pxl_depth + (blockY * stride);                                                 \
+            int padding_r = FFMAX((int)(blockX + BLOCKSIZE) - (int)(plane->w_pxls_src), 0);                             \
+            ff_copy_vals_buffer(plane->pxl_depth, offset, BLOCKSIZE, src, stride, block_buffer, padding_r, padding_b);  \
+            perform_dct(block_buffer, out_buffer, bit_depth);                                                           \
+            result->energy[block_i] = ff_calc_weighted_coeff(BLOCKSIZE, out_buffer, enable_lowpass);                    \
+            sliceTexture += result->energy[block_i];                                                                    \
+            block_i++;                                                                                                  \
+        }                                                                                                               \
+    }                                                                                                                   \
+    *partial_sum = sliceTexture;                                                                                        \
+    return  sliceTexture;                                                                                               \
 }
 
-static uint32_t calc_energy_16_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, 
-                                    int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
-                                    void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
-{    
-    int block_i = (slice_start / 16) * plane->w_blocks;
-    uint32_t sliceTexture = 0;
-
-    ALIGN_VAR_32(int16_t, block_buffer[16 * 16]);
-    ALIGN_VAR_32(int16_t, out_buffer[16 * 16]);
-
-    const unsigned bit_depth = plane->bit_depth;
-    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
-        return AVERROR(AVERROR_INVALIDDATA);
-
-    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 16) { 
-        int padding_b = FFMAX(((int)(blockY + 16) - (int)(plane->h_pxls_src)), 0);
-        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 16){
-            int offset = blockX * plane->pxl_depth + (blockY * stride);
-            int padding_r = FFMAX((int)(blockX + 16) - (int)(plane->w_pxls_src), 0);
-
-            ff_copy_vals_buffer(plane->pxl_depth, offset, 16, src, stride, block_buffer, padding_r, padding_b);
-
-            perform_dct(block_buffer, out_buffer, bit_depth);
-
-            result->energy[block_i] = ff_calc_weighted_coeff(16, out_buffer, enable_lowpass);
-            
-            sliceTexture += result->energy[block_i];
-            block_i++;
-        }
-    }
-    *partial_sum = sliceTexture;
-    return sliceTexture;
-}
-
-static uint32_t calc_energy_8_slice(int stride, uint8_t *src, VCAPlaneInfo *plane, OVCAAlgoContext *result, 
-                                    int enable_lowpass, int slice_start, int slice_end, uint32_t *partial_sum,
-                                    void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) 
-{
-    int block_i = (slice_start / 8) * plane->w_blocks;
-    uint32_t sliceTexture = 0;
-
-    ALIGN_VAR_32(int16_t, block_buffer[8 * 8]);
-    ALIGN_VAR_32(int16_t, out_buffer[8 * 8]);
-
-    const unsigned bit_depth = plane->bit_depth;
-    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)
-        return AVERROR(AVERROR_INVALIDDATA);
-
-    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 8) { 
-        int padding_b = FFMAX(((int)(blockY + 8) - (int)(plane->h_pxls_src)), 0);
-        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 8) {
-            int offset = blockX * plane->pxl_depth + (blockY * stride);
-            int padding_r = FFMAX((int)(blockX + 8) - (int)(plane->w_pxls_src), 0);
-
-            ff_copy_vals_buffer(plane->pxl_depth, offset, 8, src, stride, block_buffer, padding_r, padding_b);
-
-            perform_dct(block_buffer, out_buffer, bit_depth);
-
-            result->energy[block_i] = ff_calc_weighted_coeff(8, out_buffer, enable_lowpass);
-            
-            sliceTexture += result->energy[block_i];
-            block_i++;
-        }
-    }
-    *partial_sum = sliceTexture;
-    return sliceTexture;
-}
+DEFINE_CALC_ENERGY_SLICE(8)
+DEFINE_CALC_ENERGY_SLICE(16)
+DEFINE_CALC_ENERGY_SLICE(32)
 
 static int calc_energy_filter_slice(AVFilterContext *ctx, void *arg, int job, int nb_jobs)
 {
@@ -253,46 +176,3 @@ void ff_perform_ovca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCACont
             E, h);
     v->print(ctx, AV_LOG_INFO, "\n");
 }
-
-
-/*
-#define DEFINE_CALC_ENERGY(block_sz)                                                                        \
-static uint32_t calc_energy_##block_sz##_slice(int stride, uint8_t *src, VCAPlaneInfo *plane,               \
-                                               VCAResults *result, int enable_lowpass,                      \
-                                               int slice_start, int slice_end, uint32_t *partial_sum,       \
-                                    void (*perform_dct)(const int16_t* block, int16_t* dst, int bit_depth)) \
-{                                                                                       \
-    int block_i = (slice_start / 32) * plane->w_blocks;                                 \
-    uint32_t sliceTexture = 0;                                                          \
-    ALIGN_VAR_32(int16_t, block_buffer[32 * 32]);                                       \
-    ALIGN_VAR_32(int16_t, out_buffer[32 * 32]);                                         \
-    const unsigned bit_depth = plane->bit_depth;                                        \
-    if (bit_depth != 8 && bit_depth != 10 && bit_depth != 12)                           \
-        return AVERROR(AVERROR_INVALIDDATA);                                            \
-    for (unsigned blockY = slice_start; blockY < slice_end; blockY += 32) {             \
-        int padding_b = FFMAX(((int)(blockY + 32) - (int)(plane->h_pxls_src)), 0);      \
-        for (unsigned blockX = 0; blockX < plane->w_pxls; blockX += 32){                \
-            int offset = blockX * plane->pxl_depth + (blockY * stride);                 \
-            int padding_r = FFMAX((int)(blockX + 32) - (int)(plane->w_pxls_src), 0);    \
-            copy_vals_buffer(plane->pxl_depth, offset, 32, src, stride,                 \
-                            block_buffer, padding_r, padding_b);                        \
-            perform_dct(block_buffer, out_buffer, bit_depth);                           \
-            result->energy[block_i] =                                                   \
-                calc_weighted_coeff(32, out_buffer, enable_lowpass);                    \
-            sliceTexture += result->energy[block_i];                                    \
-            block_i++;                                                                  \
-        }                                                                               \
-    }                                                                                   \
-    *partial_sum = sliceTexture;                                                        \
-    return  sliceTexture;                                                               \
-}
-    //av_freep(block_buffer);
-    //av_freep(out_buffer);
-            // result.brightnessPerBlock[blockIndex] = uint32_t(sqrt(coeffBuffer[0]));
-            // Calculate energy and brightness
-            // Copy values to block buffer                                              
-
-DEFINE_CALC_ENERGY(32)
-DEFINE_CALC_ENERGY(16)
-DEFINE_CALC_ENERGY(8)
-*/
