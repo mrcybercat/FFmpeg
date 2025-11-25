@@ -21,6 +21,9 @@
  * functions and constants for descrete cosine transform for VCA
  */
 
+#ifndef AVFILTER_VCADCT_H
+#define AVFILTER_VCADCT_H
+
 #include "libavutil/mem.h"
 #include "filters.h"
 
@@ -29,8 +32,6 @@
 #include "libavformat/avio.h"
 #include "filters.h"
 
-#ifndef AVFILTER_VCADCT_H
-#define AVFILTER_VCADCT_H
 
 #if defined(__GNUC__)
 #define ALIGN_VAR_32(T, var) T var __attribute__((aligned(32)))
@@ -95,9 +96,9 @@ typedef struct VCAContext {
 } VCAContext;
 
 typedef struct VCAAlgoVTable {
-    av_cold int (*init_algo)(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+    int (*init_algo)(VCAAlgoContext *ctx, int n_blocks, int blocksize);
     void (*perform_algo)(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-    av_cold void (*uninit_algo)(VCAAlgoContext *ctx);
+    void (*uninit_algo)(VCAAlgoContext *ctx);
 } VCAAlgoVTable;
 
 

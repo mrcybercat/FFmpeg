@@ -21,18 +21,18 @@
  * functions and constants for VCA
  */
 
+
+#ifndef AVFILTER_IVCA_H
+#define AVFILTER_IVCA_H
+
 #include "avfilter.h"
 #include "libavutil/eval.h"
 #include "libavformat/avio.h"
 #include "vca_dct.h"
 
-
-#ifndef AVFILTER_IVCA_H
-#define AVFILTER_IVCA_H
-
-av_cold int ff_init_ivca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+int ff_init_ivca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
 void ff_perform_ivca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-av_cold void ff_uninit_ivca(VCAAlgoContext *ctx);
+void ff_uninit_ivca(VCAAlgoContext *ctx);
 
 typedef struct IVCAAlgoContext {
     VCAAlgoContext base;

@@ -22,20 +22,20 @@
  * functions and constants for EVCA
  */
 
-#include "avfilter.h"
-#include "libavutil/eval.h"
-#include "libavformat/avio.h"
-#include "libavutil/stereo3d.h"
 
-#include "vca_dct.h"
 
 #ifndef AVFILTER_SVCA_H
 #define AVFILTER_SVCA_H
 
+#include "avfilter.h"
+#include "libavutil/eval.h"
+#include "libavformat/avio.h"
+#include "libavutil/stereo3d.h"
+#include "vca_dct.h"
 
-av_cold int ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+int ff_init_svca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
 void ff_perform_svca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-av_cold void ff_uninit_svca(VCAAlgoContext *ctx);
+void ff_uninit_svca(VCAAlgoContext *ctx);
 
 typedef struct SVCAAlgoContext {
     VCAAlgoContext base;

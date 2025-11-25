@@ -22,20 +22,20 @@
  * functions and constants for ESVCA
  */
 
-#include "avfilter.h"
-#include "libavutil/eval.h"
-#include "libavformat/avio.h"
-#include "libavutil/stereo3d.h"
 
-#include "vca_dct.h"
 
 #ifndef AVFILTER_ESVCA_H
 #define AVFILTER_ESVCA_H
 
+#include "avfilter.h"
+#include "libavutil/eval.h"
+#include "libavformat/avio.h"
+#include "libavutil/stereo3d.h"
+#include "vca_dct.h"
 
-av_cold int ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
+int ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize);
 void ff_perform_esvca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl, VCAContext *v, int plane_i);
-av_cold void ff_uninit_esvca(VCAAlgoContext *ctx);
+void ff_uninit_esvca(VCAAlgoContext *ctx);
 
 typedef struct ESVCAAlgoContext {
     VCAAlgoContext base;
@@ -70,7 +70,5 @@ static const VCAAlgoVTable esvca_vtable = {
     .perform_algo = ff_perform_esvca,
     .uninit_algo = ff_uninit_esvca,
 };
-
-
 
 #endif
