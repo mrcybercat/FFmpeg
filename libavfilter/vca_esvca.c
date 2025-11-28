@@ -21,9 +21,6 @@
  * functions and constants for EVCA
  */
 
- #include "libavutil/stereo3d.h"
-
-
 #include "vca_dct.h"
 #include "vca_esvca.h"
 
@@ -79,21 +76,17 @@ static uint32_t calc_energy_##BLOCKSIZE##_##PACKING##_slice(int stride, uint8_t 
 #define UNPACK_TB_BOTTOM_OFFSET(BLOCKSIZE)      \
     ff_copy_vals_buffer(plane->pxl_depth, offset + stride * plane->h_pxls_src, BLOCKSIZE, src, stride, block_buffer, padding_r, padding_b)
 
-//#define UNPACK_CH_LEFT_OFFSET(BLOCKSIZE)        \
-    copy_vals_buffer_chl()
-//#define UNPACK_CH_RIGHT_OFFSET(BLOCKSIZE)       \
-    copy_vals_buffer_chr()
+#define UNPACK_LINES_TOP_OFFSET(BLOCKSIZE)                          \
+    ff_copy_vals_buffer(plane->pxl_depth,                           \
+                        offset * 2,                                 \
+                        BLOCKSIZE, src, stride * 2,                 \
+                        block_buffer, padding_r, padding_b)
 
-//#define UNPACK_LINES_TOP_OFFSET(BLOCKSIZE)      \
-    copy_vals_buffer_lines()
-//#define UNPACK_LINES_BOTTOM_OFFSET(BLOCKSIZE)   \
-    copy_vals_buffer_lines()
-    
-//#define UNPACK_COLUMNS_LEFT_OFFSET(BLOCKSIZE)   \
-    copy_vals_buffer_columns()
-//#define UNPACK_COLUMNS_RIGHT_OFFSET(BLOCKSIZE)  \
-    copy_vals_buffer_columns()
-
+#define UNPACK_LINES_BOTTOM_OFFSET(BLOCKSIZE)                       \
+    ff_copy_vals_buffer(plane->pxl_depth,                           \
+                        offset * 2 + stride,                        \
+                        BLOCKSIZE, src, stride * 2,                 \
+                        block_buffer, padding_r, padding_b)
 
 #define DEFINE_CALC_ENERGY_FILTER_SLICE_PACKING(PACKING, VIEW)                      \
     static int calc_energy_filter_##PACKING##_##VIEW##_slice(AVFilterContext *ctx, void *arg, int job, int nb_jobs) {\
@@ -146,34 +139,16 @@ DEFINE_CALC_ENERGY_SLICE(fs_left, UNPACK_PLAIN, LEFT);
 DEFINE_CALC_ENERGY_SLICE(fs_right, UNPACK_PLAIN, RIGHT);
 DEFINE_CALC_ENERGY_FILTER_SLICE(fs)
 
-
-/*
-// ch energy calc marco call
-DEFINE_CALC_ENERGY_SLICE(ch_left, UNPACK_CH_LEFT_OFFSET);
-DEFINE_CALC_ENERGY_SLICE(ch_right, UNPACK_CH_RIGHT_OFFSET);
-DEFINE_CALC_ENERGY_FILTER_SLICE(ch);
-
-// lines energy lines marco call
-DEFINE_CALC_ENERGY_SLICE(lines_left, UNPACK_CH_RIGHT_OFFSET);
-DEFINE_CALC_ENERGY_SLICE(lines_right, UNPACK_CH_RIGHT_OFFSET);
+// lines energy marco call
+DEFINE_CALC_ENERGY_SLICE(lines_left, UNPACK_LINES_TOP_OFFSET, LEFT);
+DEFINE_CALC_ENERGY_SLICE(lines_right, UNPACK_LINES_BOTTOM_OFFSET, RIGHT);
 DEFINE_CALC_ENERGY_FILTER_SLICE(lines);
 
-// lines energy  marco call
-DEFINE_CALC_ENERGY_SLICE(columns_left, UNPACK_CH_RIGHT_OFFSET);
-DEFINE_CALC_ENERGY_SLICE(columns_right, UNPACK_CH_RIGHT_OFFSET);
-DEFINE_CALC_ENERGY_FILTER_SLICE(columns);
 
-*/
-// fs energy calc marco call
-
-
-static int reinit_algoctx_over_stereo(ESVCAAlgoContext *result, VCAPlaneInfo *plane, int blocksize){
-    //iidnt wth = plane->w_pxls_src;
-    //int height = plane->h_pxls_src;
-
+static int reinit_algoctx_over_stereo(ESVCAAlgoContext *result, VCAPlaneInfo *plane, int blocksize) 
+{
     switch(result->stereo->type) {
         case AV_STEREO3D_2D:
-            //av_log(ctx, AV_LOG_ERROR, "Video is not stereoscopic.\n");
             return -1;
         case AV_STEREO3D_SIDEBYSIDE:
             plane->w_pxls_src = plane->w_pxls_src / 2;
@@ -197,7 +172,6 @@ static int reinit_algoctx_over_stereo(ESVCAAlgoContext *result, VCAPlaneInfo *pl
             plane->w_pxls_src = plane->w_pxls_src / 2;
             break;
         case AV_STEREO3D_UNSPEC:
-            //av_log(ctx, AV_LOG_ERROR, "Unspecified packing.\n");
             return -1;
     }
     plane->w_blocks = (plane->w_pxls_src + blocksize - 1) / blocksize;
@@ -207,7 +181,7 @@ static int reinit_algoctx_over_stereo(ESVCAAlgoContext *result, VCAPlaneInfo *pl
                 
     plane->w_pxls = plane->w_blocks * blocksize;
     plane->h_pxls = plane->h_blocks * blocksize;
-   // Free previous buffers in case they are allocated already
+    // Free previous buffers in case they are allocated already
     //av_freep(&result->energy_prev);
     av_freep(&result->energy);
     av_freep(&result->energy_dif);
@@ -267,7 +241,8 @@ static int calc_weightdiff_lr_slice(AVFilterContext *ctx, void *arg, int job, in
 
 static void dispatch_esvca(void* calc_energy_left, void* calc_energy_right, AVFilterContext *ctx, ThreadDataESVCA th,
                           int nb_threads, int blocksize, VCAPlaneInfo *plane, ESVCAAlgoContext *result,
-                          uint32_t *E_l, double *h_l, uint32_t *E_r, double *h_r, double *s){
+                          uint32_t *E_l, double *h_l, uint32_t *E_r, double *h_r, double *s)
+{
     uint32_t frameTexture = 0;
     double energyDifference = 0;
     double viewEnergyDifference = 0; 
@@ -338,7 +313,8 @@ av_cold int ff_init_esvca(VCAAlgoContext *ctx, int n_blocks, int blocksize) {
     return 0;
 }
 
-void ff_uninit_esvca(VCAAlgoContext *ctx) {
+void ff_uninit_esvca(VCAAlgoContext *ctx) 
+{
     ESVCAAlgoContext *esvca = (ESVCAAlgoContext *)ctx;
 
     av_freep(&esvca->energy);    
@@ -355,7 +331,8 @@ void ff_uninit_esvca(VCAAlgoContext *ctx) {
 }
 
 static void perform_esvca_flats (AVFilterContext *ctx, ThreadDataESVCA th, ESVCAAlgoContext *esvca, 
-                VCAContext *v, VCAPlaneInfo *plane, int blocksize, int nb_threads, int frame_n) {
+                VCAContext *v, VCAPlaneInfo *plane, int blocksize, int nb_threads, int frame_n) 
+{
     uint32_t E_l, E_r = 0;
     double h_l, h_r, s = 0;
 
@@ -370,27 +347,11 @@ static void perform_esvca_flats (AVFilterContext *ctx, ThreadDataESVCA th, ESVCA
         case AV_STEREO3D_TOPBOTTOM:
             dispatch_esvca(calc_energy_filter_tb_left_slice, calc_energy_filter_tb_right_slice, 
                     ctx, th, nb_threads, blocksize, plane, esvca, &E_l, &h_l, &E_r, &h_r, &s);
-            break;
-/*
-
-        case AV_STEREO3D_CHECKERBOARD:
-            dispatch_svca(calc_energy_filter_ch_left_slice, calc_energy_filter_ch_right_slice, 
-                    ctx, th, nb_threads, plane, is_first_frame, svca, &E_l, &h_l, &E_r, &h_r, &s);
-            break;        
-        case AV_STEREO3D_SIDEBYSIDE_QUINCUNX:
-            dispatch_svca(calc_energy_filter_sbs_left_slice, calc_energy_filter_sbs_right_slice, 
-                    ctx, th, nb_threads, plane, is_first_frame, svca, &E_l, &h_l, &E_r, &h_r, &s);
-            break;
+            break;       
         case AV_STEREO3D_LINES:
-            dispatch_svca(calc_energy_filter_lines_left_slice, calc_energy_filter_lines_right_slice, 
-                    ctx, th, nb_threads, plane, is_first_frame, svca, &E_l, &h_l, &E_r, &h_r, &s);
+            dispatch_esvca(calc_energy_filter_lines_left_slice, calc_energy_filter_lines_right_slice, 
+                     ctx, th, nb_threads, blocksize, plane, esvca, &E_l, &h_l, &E_r, &h_r, &s);
             break;
-        case AV_STEREO3D_COLUMNS:
-            dispatch_svca(calc_energy_filter_columns_left_slice, calc_energy_filter_columns_right_slice, 
-                    ctx, th, nb_threads, plane, is_first_frame, svca, &E_l, &h_l, &E_r, &h_r, &s);
-            break;
-*/
-            
     }
 
     av_free(th.partial_sums_E);    
@@ -490,8 +451,9 @@ void ff_perform_esvca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl,
             }
         }
         else {
-            av_log(ctx, AV_LOG_ERROR, "No Stereo data detected in a file\n");
-            return;
+            av_log(ctx, AV_LOG_ERROR, "No Stereo data detected in a file, assuming side-by-side format, results may be inaccurate\n");
+            esvca->stereo = av_stereo3d_alloc();
+            esvca->stereo->type = AV_STEREO3D_SIDEBYSIDE;
         }
     }
 
@@ -512,11 +474,9 @@ void ff_perform_esvca(AVFilterContext *ctx, AVFrame *in, FilterLink *inl,
 
     switch(esvca->stereo->type) { 
         case AV_STEREO3D_SIDEBYSIDE:
+        case AV_STEREO3D_SIDEBYSIDE_QUINCUNX:
         case AV_STEREO3D_TOPBOTTOM:
-        //case AV_STEREO3D_CHECKERBOARD:
-        //case AV_STEREO3D_SIDEBYSIDE_QUINCUNX:
-        //case AV_STEREO3D_LINES:
-        //case AV_STEREO3D_COLUMNS:
+        case AV_STEREO3D_LINES:
             perform_esvca_flats(ctx, th, esvca, v, plane, v->blocksize, nb_threads, inl->frame_count_out);
             break;
         case AV_STEREO3D_FRAMESEQUENCE:
