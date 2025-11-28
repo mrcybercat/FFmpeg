@@ -17,6 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+
 #include "libavutil/mem.h"
 
 #include "vca_dct.h"
@@ -476,7 +477,7 @@ uint32_t ff_calc_weighted_coeff(unsigned blocksize, int16_t *coeff_buffer, int e
 {
     uint32_t weighted_sum = 0;
 
-    uint16_t* weights_matrix = weights_dct32;
+    const uint16_t* weights_matrix = weights_dct32;
     switch (blocksize) {
         case 32:
             weights_matrix = weights_dct32;
@@ -505,9 +506,8 @@ void ff_calc_weighted_coeff_w_diff(unsigned blocksize, int16_t *coeff_buffer, ui
 {
     uint32_t weighted_sum = 0;
     double diff_weight_sum = 0;
-    int i = 0u;
 
-    uint16_t* weights_matrix = weights_dct32;
+    const uint16_t* weights_matrix = weights_dct32;
     switch (blocksize) {
         case 32:
             weights_matrix = weights_dct32;
@@ -547,7 +547,6 @@ static void copy_vals_wo_padding(unsigned pxl_depth, unsigned blocksize, uint8_t
                 *(buffer++) = (int16_t)srcptr[x + stride*y];
     } else {
         uint16_t *srcptr = (uint16_t *) src;
-        const unsigned bytes_per_line = blocksize * 2;
         for (unsigned y = 0; y < blocksize; ++y)
         {
             memcpy(buffer, srcptr, blocksize * sizeof(uint16_t));
@@ -579,7 +578,6 @@ static void copy_vals_w_padding(unsigned pxl_depth, unsigned blocksize, uint8_t 
     } else {
         uint16_t *srcptr = (uint16_t*)(src);
         for (; y < blocksize - padding_b; y++) {
-            unsigned x     = 0;
             buffer_last_line = buffer;
 
             const unsigned nr_vals_copy = blocksize - padding_r;
@@ -593,7 +591,6 @@ static void copy_vals_w_padding(unsigned pxl_depth, unsigned blocksize, uint8_t 
             srcptr += stride / 2;
         }
         for (; y < blocksize; y++) {
-            const unsigned nr_bytes_copy = blocksize * 2;
             memcpy(buffer, buffer_last_line, blocksize * sizeof(uint16_t));
             buffer += blocksize;
         }

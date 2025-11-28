@@ -21,6 +21,7 @@
  * functions and constants for EVCA
  */
 
+ 
 #include "vca_dct.h"
 #include "vca_esvca.h"
 

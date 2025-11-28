@@ -22,8 +22,6 @@
  * functions and constants for EVCA
  */
 
-
-
 #ifndef AVFILTER_EVCA_H
 #define AVFILTER_EVCA_H
 

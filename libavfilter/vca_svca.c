@@ -22,7 +22,6 @@
  */
 
 
-
 #include "vca_dct.h"
 #include "vca_svca.h"
 

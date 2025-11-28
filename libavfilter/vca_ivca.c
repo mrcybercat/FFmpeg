@@ -20,7 +20,6 @@
 #include "vca_dct.h"
 #include "vca_ivca.h"
 
-
 #define FLT_WINDOW          5   
 #define GOP_SIZE            4
 #define IVCA_MAGIC_NUMBER 500
@@ -126,7 +125,6 @@ static uint32_t calc_energy(AVFilterContext *ctx, int linesize, uint8_t *src, VC
 }
 
 static double calc_energy_diff(VCAPlaneInfo *plane, IVCAAlgoContext *result, int n_blocks, int blocksize) {
-    int block_i = 0u;
 	double diff_sum = 0.0;
 
     for (size_t i = 0; i < n_blocks; i++) {

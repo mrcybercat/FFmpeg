@@ -23,7 +23,6 @@
  */
 
 
-
 #ifndef AVFILTER_SVCA_H
 #define AVFILTER_SVCA_H
 

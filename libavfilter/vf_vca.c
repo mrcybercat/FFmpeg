@@ -31,7 +31,6 @@
 #include "libavutil/mem.h"
 #include "libavutil/opt.h"
 
-
 #include "avfilter.h"
 #include "filters.h"
 #include "formats.h"
@@ -295,7 +294,6 @@ static av_cold int init(AVFilterContext *ctx)
     // User options but no input data
     VCAContext *v = ctx->priv;
     int ret;
-    int planes = v->enable_chroma ? 3 : 1;
     v->n_frames_processed = 0;
     
     if (v->file_str) {
